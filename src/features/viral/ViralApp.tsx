@@ -374,8 +374,13 @@ export default function ViralApp() {
                         </p>
                         {aiCriteria && (
                           <div className="mt-4 rounded-2xl border border-border bg-surface px-4 py-3">
-                            <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Criterio IA</p>
-                            <p className="mt-1 text-sm text-muted-foreground">{aiCriteria}</p>
+                            <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+                              Criterio IA (por qué este topic puede rendir)
+                            </p>
+                            <p className="mt-1 text-sm">
+                              <span className="font-extrabold">Topic:</span> <span className="text-muted-foreground">{viralTopic}</span>
+                            </p>
+                            <p className="mt-2 text-sm text-muted-foreground">{aiCriteria}</p>
                           </div>
                         )}
                       </div>

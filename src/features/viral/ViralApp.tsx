@@ -301,7 +301,6 @@ export default function ViralApp() {
                   <div className="rounded-[28px] border border-border bg-card shadow-glow p-5 md:p-6">
                     <div className="flex items-center justify-between mb-4">
                       <div>
-                        <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Vista previa</p>
                         <p className="text-lg font-extrabold">Señales de oportunidad</p>
                       </div>
                       <div className="h-10 w-10 rounded-2xl bg-primary/15 border border-primary/25 grid place-items-center animate-float-y">

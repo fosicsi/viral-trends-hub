@@ -8,16 +8,17 @@ import { ApiKeyDialog } from "./components/ApiKeyDialog";
 import type { ViralFilters, VideoItem } from "./types";
 import { mockVideos } from "./mock";
 import { Button } from "@/components/ui/button";
-
-const LS_API_KEY = "viradrian_api_key";
+import { youtubeSearch } from "@/lib/api/youtube";
 
 export default function ViralApp() {
   const [view, setView] = React.useState<ViralView>("home");
   const [query, setQuery] = React.useState<string>("");
   const [selected, setSelected] = React.useState<VideoItem | null>(null);
-  const [apiKey, setApiKey] = React.useState<string>("");
   const [showApiKey, setShowApiKey] = React.useState(false);
   const [showFilters, setShowFilters] = React.useState(false);
+  const [liveResults, setLiveResults] = React.useState<VideoItem[]>([]);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
   const [filters, setFilters] = React.useState<ViralFilters>({
     minViews: 10_000,
     maxSubs: 500_000,
@@ -30,12 +31,7 @@ export default function ViralApp() {
     document.documentElement.classList.add("dark");
   }, []);
 
-  React.useEffect(() => {
-    const k = localStorage.getItem(LS_API_KEY);
-    if (k) setApiKey(k);
-  }, []);
-
-  const results = React.useMemo(() => {
+  const previewResults = React.useMemo(() => {
     const q = query.trim().toLowerCase();
     return mockVideos
       .filter((v) => (q ? `${v.title} ${v.channel}`.toLowerCase().includes(q) : true))
@@ -43,9 +39,25 @@ export default function ViralApp() {
       .sort((a, b) => b.growthRatio - a.growthRatio);
   }, [query, filters]);
 
-  const handleSearch = () => {
-    // UI-only v1: when we wire the real search we will require apiKey.
+  const handleSearch = async () => {
     setView("videos");
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await youtubeSearch(query, filters);
+      if ("error" in res) {
+        setError(res.error);
+        setLiveResults([]);
+        return;
+      }
+      setLiveResults(res.data);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Error inesperado";
+      setError(msg);
+      setLiveResults([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -87,15 +99,9 @@ export default function ViralApp() {
                   </div>
 
                   <div className="text-sm text-muted-foreground">
-                    {apiKey ? (
-                      <span>
-                        API Key detectada en tu navegador. Cuando quieras, conectamos el buscador real.
-                      </span>
-                    ) : (
-                      <span>
-                        Aún no hay API Key: puedes cargarla desde el icono de llave. (UI v1 funciona con datos de ejemplo.)
-                      </span>
-                    )}
+                    <span>
+                      Buscador en vivo activado: usa el input para traer resultados reales (la API Key se guarda de forma segura).
+                    </span>
                   </div>
                 </div>
 
@@ -112,7 +118,7 @@ export default function ViralApp() {
                     </div>
 
                     <div className="grid sm:grid-cols-2 gap-3">
-                      {results.slice(0, 2).map((v) => (
+                      {previewResults.slice(0, 2).map((v) => (
                         <ViralVideoCard key={v.id} video={v} onOpen={setSelected} />
                       ))}
                     </div>
@@ -142,11 +148,25 @@ export default function ViralApp() {
                 onOpenFilters={() => setShowFilters(true)}
               />
 
+              {error && (
+                <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
+                  <p className="font-bold">Error al buscar</p>
+                  <p className="text-muted-foreground mt-1">{error}</p>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {results.map((v) => (
-                  <ViralVideoCard key={v.id} video={v} onOpen={setSelected} />
-                ))}
-                {results.length === 0 && (
+                {loading &&
+                  Array.from({ length: 8 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="h-[360px] rounded-[20px] border border-border bg-card/40 animate-pulse"
+                    />
+                  ))}
+
+                {!loading && liveResults.map((v) => <ViralVideoCard key={v.id} video={v} onOpen={setSelected} />)}
+
+                {!loading && liveResults.length === 0 && (
                   <div className="col-span-full text-center py-16 text-muted-foreground">
                     No hay resultados con estos filtros. Prueba bajando el mínimo de vistas o subiendo el máximo de subs.
                   </div>
@@ -236,11 +256,6 @@ export default function ViralApp() {
       <ApiKeyDialog
         open={showApiKey}
         onOpenChange={setShowApiKey}
-        value={apiKey}
-        onSave={(k) => {
-          setApiKey(k);
-          localStorage.setItem(LS_API_KEY, k);
-        }}
       />
     </div>
   );

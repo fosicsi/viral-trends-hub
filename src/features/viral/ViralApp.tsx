@@ -102,13 +102,38 @@ export default function ViralApp() {
     };
   }, []);
 
-  const previewResults = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return mockVideos
-      .filter((v) => (q ? `${v.title} ${v.channel}`.toLowerCase().includes(q) : true))
-      .filter((v) => v.views >= filters.minViews && v.channelSubscribers <= filters.maxSubs)
-      .sort((a, b) => b.growthRatio - a.growthRatio);
-  }, [query, filters]);
+  const homePreviewShorts = React.useMemo(() => {
+    // Criterio "base" con el que se desarrolló la app (oportunidad rápida):
+    // Shorts recientes, canales relativamente pequeños y con un mínimo de tracción.
+    const preset: ViralFilters = { minViews: 10_000, maxSubs: 200_000, date: "week", type: "short" };
+
+    const now = Date.now();
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
+
+    const parseDurationSeconds = (durationString: string) => {
+      const parts = String(durationString || "0:00")
+        .split(":")
+        .map((x) => Number(x));
+      return parts.length >= 2 ? Math.max(0, (parts[0] || 0) * 60 + (parts[1] || 0)) : 0;
+    };
+
+    const filterShorts = (enforceDate: boolean) =>
+      mockVideos
+        .filter((v) => parseDurationSeconds(v.durationString) <= 60)
+        .filter((v) => v.views >= preset.minViews && v.channelSubscribers <= preset.maxSubs)
+        .filter((v) => {
+          if (!enforceDate) return true;
+          const published = Date.parse(v.publishedAt);
+          return Number.isFinite(published) ? published >= now - weekMs : true;
+        });
+
+    const candidates = filterShorts(true);
+    const fallback = candidates.length >= 2 ? candidates : filterShorts(false);
+    const pool = fallback.length > 0 ? fallback : mockVideos;
+
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 2);
+  }, []);
 
   const handleSearchWithQuery = async (nextQuery: string) => {
     const q = nextQuery.trim();
@@ -285,7 +310,7 @@ export default function ViralApp() {
                     </div>
 
                     <div className="grid sm:grid-cols-2 gap-3">
-                      {previewResults.slice(0, 2).map((v) => (
+                      {homePreviewShorts.map((v) => (
                         <ViralVideoCard
                           key={v.id}
                           video={v}

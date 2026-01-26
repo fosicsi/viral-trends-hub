@@ -9,11 +9,13 @@ export function ViralVideoCard({
   onOpen,
   saved,
   onToggleSave,
+  showExternalLink = true,
 }: {
   video: VideoItem;
   onOpen: (v: VideoItem) => void;
   saved?: boolean;
   onToggleSave?: (v: VideoItem) => void;
+  showExternalLink?: boolean;
 }) {
   const viewsPerHour = Math.max(1, Math.round(video.views / 72));
   const vphDisplay = viewsPerHour >= 1000 ? `${(viewsPerHour / 1000).toFixed(1)}K` : String(viewsPerHour);
@@ -30,15 +32,17 @@ export function ViralVideoCard({
         <div className="absolute bottom-2 right-2 bg-background/70 text-foreground text-[10px] font-extrabold px-2 py-1 rounded-lg border border-border backdrop-blur">
           {video.durationString}
         </div>
-        <a
-          href={video.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="absolute inset-0 bg-background/10 opacity-0 group-hover:opacity-100 transition-opacity grid place-items-center"
-          aria-label="Abrir en YouTube"
-        >
-          <ExternalLink className="text-foreground" size={28} />
-        </a>
+        {showExternalLink && (
+          <a
+            href={video.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute inset-0 bg-background/10 opacity-0 group-hover:opacity-100 transition-opacity grid place-items-center"
+            aria-label="Abrir en YouTube"
+          >
+            <ExternalLink className="text-foreground" size={28} />
+          </a>
+        )}
       </div>
 
       <div className="p-4 flex flex-col gap-3">

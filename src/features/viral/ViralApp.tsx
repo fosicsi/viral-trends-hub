@@ -5,10 +5,13 @@ import { ViralSearchHeader } from "./components/ViralSearchHeader";
 import { ViralVideoCard } from "./components/ViralVideoCard";
 import { ViralFiltersDialog } from "./components/ViralFiltersDialog";
 import { ApiKeyDialog } from "./components/ApiKeyDialog";
+import { ViralSavedView } from "./components/ViralSavedView";
+import { ViralToolsView } from "./components/ViralToolsView";
 import type { ViralFilters, VideoItem } from "./types";
 import { mockVideos } from "./mock";
 import { Button } from "@/components/ui/button";
 import { youtubeSearch } from "@/lib/api/youtube";
+import { useSavedVideos } from "./hooks/useSavedVideos";
 
 const VIRAL_TOPICS = [
   "inteligencia artificial",
@@ -54,6 +57,8 @@ export default function ViralApp() {
     date: "year",
     type: "all",
   });
+
+  const { saved, isSaved, toggleSaved, clearSaved } = useSavedVideos();
 
   React.useEffect(() => {
     // dark-first by default
@@ -179,7 +184,13 @@ export default function ViralApp() {
 
                     <div className="grid sm:grid-cols-2 gap-3">
                       {previewResults.slice(0, 2).map((v) => (
-                        <ViralVideoCard key={v.id} video={v} onOpen={setSelected} />
+                        <ViralVideoCard
+                          key={v.id}
+                          video={v}
+                          onOpen={setSelected}
+                          saved={isSaved(v.id)}
+                          onToggleSave={toggleSaved}
+                        />
                       ))}
                     </div>
 
@@ -224,7 +235,16 @@ export default function ViralApp() {
                     />
                   ))}
 
-                {!loading && liveResults.map((v) => <ViralVideoCard key={v.id} video={v} onOpen={setSelected} />)}
+                {!loading &&
+                  liveResults.map((v) => (
+                    <ViralVideoCard
+                      key={v.id}
+                      video={v}
+                      onOpen={setSelected}
+                      saved={isSaved(v.id)}
+                      onToggleSave={toggleSaved}
+                    />
+                  ))}
 
                 {!loading && liveResults.length === 0 && (
                   <div className="col-span-full text-center py-16 text-muted-foreground">
@@ -302,7 +322,16 @@ export default function ViralApp() {
                         />
                       ))}
 
-                    {!viralLoading && viralResults.map((v) => <ViralVideoCard key={v.id} video={v} onOpen={setSelected} />)}
+                    {!viralLoading &&
+                      viralResults.map((v) => (
+                        <ViralVideoCard
+                          key={v.id}
+                          video={v}
+                          onOpen={setSelected}
+                          saved={isSaved(v.id)}
+                          onToggleSave={toggleSaved}
+                        />
+                      ))}
 
                     {!viralLoading && viralResults.length === 0 && (
                       <div className="col-span-full text-center py-16 text-muted-foreground">
@@ -311,19 +340,33 @@ export default function ViralApp() {
                     )}
                   </div>
                 </div>
+              ) : view === "saved" ? (
+                <ViralSavedView
+                  saved={saved}
+                  onOpen={setSelected}
+                  onToggleSave={toggleSaved}
+                  onGoSearch={() => setView("videos")}
+                  onClear={clearSaved}
+                />
               ) : (
-                <div className="rounded-[28px] border border-border bg-card p-8 shadow-elev">
-                  <h2 className="text-2xl font-extrabold">En construcción</h2>
-                  <p className="text-muted-foreground mt-2">Siguiente: guardados y herramientas como viralyt.ai.</p>
-                  <div className="mt-6 flex flex-wrap gap-3">
-                    <Button variant="hero" className="rounded-xl" onClick={() => setView("videos")}>
-                      Ir al buscador
-                    </Button>
-                    <Button variant="glowOutline" className="rounded-xl" onClick={() => setShowApiKey(true)}>
-                      Conexión YouTube
-                    </Button>
-                  </div>
-                </div>
+                <ViralToolsView
+                  onOpenApiKey={() => setShowApiKey(true)}
+                  onOpenSearchFilters={() => setShowFilters(true)}
+                  onOpenExplorerFilters={() => setShowViralFilters(true)}
+                  onGoSearch={() => setView("videos")}
+                  onExportSaved={() => {
+                    const blob = new Blob([JSON.stringify(saved, null, 2)], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "viralyt-guardados.json";
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                  }}
+                  savedCount={saved.length}
+                />
               )}
             </section>
           )}

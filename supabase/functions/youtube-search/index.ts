@@ -12,6 +12,25 @@ type ViralFilters = {
   type: "all" | "short" | "medium" | "long";
 };
 
+function toSafeNumber(v: unknown, fallback: number): number {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeFilters(input: any): ViralFilters {
+  const minViews = Math.max(0, Math.floor(toSafeNumber(input?.minViews, 10_000)));
+  const maxSubs = Math.max(0, Math.floor(toSafeNumber(input?.maxSubs, 500_000)));
+  const date: ViralFilters["date"] =
+    input?.date === "week" || input?.date === "month" || input?.date === "year" || input?.date === "all"
+      ? input.date
+      : "year";
+  const type: ViralFilters["type"] =
+    input?.type === "all" || input?.type === "short" || input?.type === "medium" || input?.type === "long"
+      ? input.type
+      : "all";
+  return { minViews, maxSubs, date, type };
+}
+
 type VideoItem = {
   id: string;
   title: string;
@@ -65,12 +84,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const query = String(body?.query ?? "").trim() || "viral ideas";
-    const filters: ViralFilters = body?.filters ?? {
-      minViews: 10_000,
-      maxSubs: 500_000,
-      date: "year",
-      type: "all",
-    };
+    const filters: ViralFilters = normalizeFilters(body?.filters);
 
     const durationParam =
       filters.type === "short"

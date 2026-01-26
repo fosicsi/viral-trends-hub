@@ -427,7 +427,12 @@ export default function ViralApp() {
         onOpenChange={setShowFilters}
         value={filters}
         onChange={setFilters}
-        onApply={() => setShowFilters(false)}
+        onApply={() => {
+          setShowFilters(false);
+          // Re-run search so the user immediately sees the effect of the new parameters.
+          // Only do it when the user is in the Search view.
+          if (view === "videos") handleSearch();
+        }}
       />
 
       <ViralFiltersDialog

@@ -57,6 +57,15 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+
+          /* App-specific semantics */
+          surface: {
+            DEFAULT: "hsl(var(--surface))",
+            2: "hsl(var(--surface-2))",
+          },
+          brand: {
+            2: "hsl(var(--brand-2))",
+          },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -80,10 +89,21 @@ export default {
             height: "0",
           },
         },
+
+        "fade-in": {
+          from: { opacity: "0", transform: "translateY(8px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "float-y": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-6px)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "fade-in": "fade-in 320ms cubic-bezier(0.21, 1, 0.21, 1)",
+        "float-y": "float-y 6s ease-in-out infinite",
       },
     },
   },

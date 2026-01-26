@@ -269,11 +269,7 @@ export default function ViralApp() {
                     </Button>
                   </div>
 
-                  <div className="text-sm text-muted-foreground">
-                    <span>
-                      Buscador en vivo activado: usa el input para traer resultados reales (la API Key se guarda de forma segura).
-                    </span>
-                  </div>
+
                 </div>
 
                 <div className="relative">

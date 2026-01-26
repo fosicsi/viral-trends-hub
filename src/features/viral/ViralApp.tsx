@@ -73,6 +73,29 @@ export default function ViralApp() {
       .sort((a, b) => b.growthRatio - a.growthRatio);
   }, [query, filters]);
 
+  const handleSearchWithQuery = async (nextQuery: string) => {
+    const q = nextQuery.trim();
+    setQuery(nextQuery);
+    setView("videos");
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await youtubeSearch(q, filters);
+      if ("error" in res) {
+        setError(res.error);
+        setLiveResults([]);
+        return;
+      }
+      setLiveResults(res.data);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Error inesperado";
+      setError(msg);
+      setLiveResults([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSearch = async () => {
     setView("videos");
     setLoading(true);
@@ -155,8 +178,7 @@ export default function ViralApp() {
                       size="xl"
                       className="rounded-2xl"
                       onClick={() => {
-                        setQuery("IA");
-                        setView("videos");
+                        handleSearchWithQuery("IA");
                       }}
                     >
                       Probar con “IA”

@@ -314,6 +314,7 @@ export default function ViralApp() {
                           key={v.id}
                           video={v}
                           onOpen={setSelected}
+                          showExternalLink={false}
                           saved={isSaved(v.id)}
                           onToggleSave={toggleSaved}
                         />

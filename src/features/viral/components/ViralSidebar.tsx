@@ -1,6 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { Bookmark, Grid3X3, Home, KeyRound, Search, Zap } from "lucide-react";
+import { Bookmark, Grid3X3, Home, KeyRound, Search, Zap, Sun, Moon } from "lucide-react";
+import { useTheme } from "next-themes";
 
 export type ViralView = "home" | "videos" | "viral" | "saved" | "tools";
 
@@ -69,10 +70,29 @@ export function ViralSidebar({ view, onChangeView, onOpenApiKey }: Props) {
       </div>
 
       <div className="mt-auto w-full flex flex-col items-center px-2 gap-3">
+        <ThemeToggle />
         <SidebarItem ariaLabel="Configurar API" onClick={onOpenApiKey}>
           <KeyRound size={22} />
         </SidebarItem>
       </div>
     </aside>
+  );
+}
+
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  const isDark = theme === "dark";
+
+  return (
+    <button
+      aria-label={isDark ? "Cambiar a modo día" : "Cambiar a modo noche"}
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      className={cn(
+        "w-12 h-12 rounded-xl grid place-items-center transition-colors",
+        "text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground",
+      )}
+    >
+      {isDark ? <Sun size={22} /> : <Moon size={22} />}
+    </button>
   );
 }

@@ -25,6 +25,8 @@ type VideoItem = {
   growthRatio: number;
 };
 
+type InternalVideoItem = VideoItem & { _durSeconds: number };
+
 function parseDuration(iso: string): number {
   // Example: PT1H2M10S
   const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
@@ -78,6 +80,17 @@ Deno.serve(async (req) => {
           : filters.type === "long"
             ? "&videoDuration=long"
             : "";
+
+    // NOTE: YouTube's `videoDuration=short` means < 4 minutes, but users expect
+    // "Shorts" to be <= 60 seconds. We'll enforce that with a post-filter.
+    function matchesType(type: ViralFilters["type"], durSeconds: number): boolean {
+      if (type === "all") return true;
+      if (type === "short") return durSeconds <= 60;
+      // Keep these pragmatic (and closer to user expectations than YouTube's buckets)
+      if (type === "medium") return durSeconds > 60 && durSeconds <= 10 * 60;
+      if (type === "long") return durSeconds > 10 * 60;
+      return true;
+    }
 
     const publishedAfter = getPublishedAfterDate(filters.date);
     const dateParam = publishedAfter ? `&publishedAfter=${encodeURIComponent(publishedAfter)}` : "";
@@ -133,7 +146,7 @@ Deno.serve(async (req) => {
       if (c?.id) cStats[c.id] = c?.statistics;
     });
 
-    const processed: VideoItem[] = vItems
+    const processedInternal: InternalVideoItem[] = vItems
       .map((v: any) => {
         const views = Number(v?.statistics?.viewCount || 0);
         const subs = Number(cStats[v?.snippet?.channelId]?.subscriberCount || 0) || Math.max(0, Math.floor(views / 500));
@@ -149,15 +162,19 @@ Deno.serve(async (req) => {
           views,
           publishedAt: String(v?.snippet?.publishedAt || ""),
           durationString: toDurationString(durSeconds),
+          _durSeconds: durSeconds,
           thumbnail: thumb,
           url: `https://www.youtube.com/watch?v=${encodeURIComponent(String(v?.id))}`,
           growthRatio: views / Math.max(1, subs),
         };
       })
       .filter((v) => v.thumbnail && v.title)
+      .filter((v) => matchesType(filters.type, v._durSeconds))
       .filter((v) => v.views >= Number(filters.minViews || 0) && v.channelSubscribers <= Number(filters.maxSubs || Infinity))
       .sort((a, b) => b.growthRatio - a.growthRatio)
       .slice(0, 48);
+
+    const processed: VideoItem[] = processedInternal.map(({ _durSeconds: _ignored, ...rest }) => rest);
 
     return new Response(JSON.stringify({ success: true, data: processed }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

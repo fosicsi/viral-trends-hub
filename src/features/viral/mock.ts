@@ -53,4 +53,43 @@ export const mockVideos: VideoItem[] = [
     url: "https://www.youtube.com",
     growthRatio: 27.8,
   },
+  {
+    id: "a5",
+    title: "Short: 1 prompt para títulos que suben el CTR",
+    channel: "Creador en Modo Pro",
+    channelSubscribers: 87000,
+    views: 410000,
+    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
+    durationString: "0:55",
+    thumbnail:
+      "https://images.unsplash.com/photo-1526378722484-bd91ca387e72?auto=format&fit=crop&w=1200&q=80",
+    url: "https://www.youtube.com",
+    growthRatio: 14.2,
+  },
+  {
+    id: "a6",
+    title: "Short: la métrica que delata un vídeo con potencial",
+    channel: "Analytics Fácil",
+    channelSubscribers: 145000,
+    views: 690000,
+    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
+    durationString: "0:37",
+    thumbnail:
+      "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80",
+    url: "https://www.youtube.com",
+    growthRatio: 11.6,
+  },
+  {
+    id: "a7",
+    title: "Short: 3 hooks para retener en 2 segundos",
+    channel: "Shorts Lab",
+    channelSubscribers: 52000,
+    views: 330000,
+    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 1).toISOString(),
+    durationString: "0:29",
+    thumbnail:
+      "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80",
+    url: "https://www.youtube.com",
+    growthRatio: 18.9,
+  },
 ];

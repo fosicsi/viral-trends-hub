@@ -33,7 +33,7 @@ export function ViralVideoCard({
         <a
           href={video.url}
           target="_blank"
-          rel="noreferrer"
+          rel="noopener noreferrer"
           className="absolute inset-0 bg-background/10 opacity-0 group-hover:opacity-100 transition-opacity grid place-items-center"
           aria-label="Abrir en YouTube"
         >

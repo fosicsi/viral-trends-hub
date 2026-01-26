@@ -533,7 +533,7 @@ export default function ViralApp() {
                   <a
                     href={selected.url}
                     target="_blank"
-                    rel="noreferrer"
+                     rel="noopener noreferrer"
                     className="mt-4 block text-sm font-bold text-primary hover:underline"
                   >
                     Abrir en YouTube

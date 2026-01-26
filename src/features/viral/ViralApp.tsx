@@ -247,7 +247,7 @@ export default function ViralApp() {
               <div className="grid lg:grid-cols-2 gap-10 items-center">
                 <div className="space-y-6">
                   <h1 className="text-4xl md:text-6xl font-extrabold leading-[1.02] tracking-tight">
-                    Encuentra temas virales <span className="text-primary">antes</span> de que revienten.
+                    Encuentra temas virales <span className="text-primary">antes</span> de que se agoten.
                   </h1>
                   <p className="text-muted-foreground text-lg md:text-xl max-w-xl">
                     Un tablero para descubrir oportunidades en YouTube con señales rápidas: vistas, velocidad y relación

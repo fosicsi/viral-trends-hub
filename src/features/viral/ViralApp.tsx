@@ -10,6 +10,21 @@ import { mockVideos } from "./mock";
 import { Button } from "@/components/ui/button";
 import { youtubeSearch } from "@/lib/api/youtube";
 
+const VIRAL_TOPICS = [
+  "inteligencia artificial",
+  "finanzas personales",
+  "fitness en casa",
+  "recetas rápidas",
+  "motivación",
+  "productividad",
+  "misterios y datos curiosos",
+  "tecnología gadgets",
+  "historias reales",
+  "animales y mascotas",
+  "gaming",
+  "emprendimiento",
+];
+
 export default function ViralApp() {
   const [view, setView] = React.useState<ViralView>("home");
   const [query, setQuery] = React.useState<string>("");
@@ -19,6 +34,20 @@ export default function ViralApp() {
   const [liveResults, setLiveResults] = React.useState<VideoItem[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Viral explorer state (own filters + own results)
+  const [viralTopic, setViralTopic] = React.useState<string>(VIRAL_TOPICS[0]);
+  const [viralResults, setViralResults] = React.useState<VideoItem[]>([]);
+  const [viralLoading, setViralLoading] = React.useState(false);
+  const [viralError, setViralError] = React.useState<string | null>(null);
+  const [showViralFilters, setShowViralFilters] = React.useState(false);
+  const [viralFilters, setViralFilters] = React.useState<ViralFilters>({
+    minViews: 10_000,
+    maxSubs: 200_000,
+    date: "week",
+    type: "short",
+  });
+
   const [filters, setFilters] = React.useState<ViralFilters>({
     minViews: 10_000,
     maxSubs: 500_000,
@@ -59,6 +88,37 @@ export default function ViralApp() {
       setLoading(false);
     }
   };
+
+  const runViralSearch = async (topic?: string) => {
+    const q = (topic ?? viralTopic).trim();
+    if (!q) return;
+
+    setViralLoading(true);
+    setViralError(null);
+    try {
+      const res = await youtubeSearch(q, viralFilters);
+      if ("error" in res) {
+        setViralError(res.error);
+        setViralResults([]);
+        return;
+      }
+      setViralResults(res.data);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Error inesperado";
+      setViralError(msg);
+      setViralResults([]);
+    } finally {
+      setViralLoading(false);
+    }
+  };
+
+  // Auto-buscar al entrar en Explorador Viral (una vez por entrada)
+  React.useEffect(() => {
+    if (view !== "viral") return;
+    if (viralResults.length > 0 || viralLoading) return;
+    runViralSearch(viralTopic);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -177,20 +237,94 @@ export default function ViralApp() {
 
           {(view === "viral" || view === "saved" || view === "tools") && (
             <section className="max-w-6xl mx-auto px-6 md:px-10 py-16">
-              <div className="rounded-[28px] border border-border bg-card p-8 shadow-elev">
-                <h2 className="text-2xl font-extrabold">En construcción</h2>
-                <p className="text-muted-foreground mt-2">
-                  En v2 conectamos el flujo real del video (viralyt.ai): explorador viral, guardados y herramientas.
-                </p>
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <Button variant="hero" className="rounded-xl" onClick={() => setView("videos")}>
-                    Ir al buscador
-                  </Button>
-                  <Button variant="glowOutline" className="rounded-xl" onClick={() => setShowApiKey(true)}>
-                    Configurar API Key
-                  </Button>
+              {view === "viral" ? (
+                <div className="space-y-8">
+                  <div className="rounded-[28px] border border-border bg-card p-8 shadow-elev">
+                    <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+                      <div>
+                        <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">Explorador Viral</h2>
+                        <p className="text-muted-foreground mt-2 max-w-2xl">
+                          “Sorpréndeme” elige un topic y busca Shorts recientes en canales relativamente pequeños (filtros propios).
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-3">
+                        <Button
+                          variant="hero"
+                          className="rounded-2xl"
+                          onClick={() => {
+                            const next = VIRAL_TOPICS[Math.floor(Math.random() * VIRAL_TOPICS.length)];
+                            setViralTopic(next);
+                            runViralSearch(next);
+                          }}
+                        >
+                          Sorpréndeme
+                        </Button>
+                        <Button variant="glowOutline" className="rounded-2xl" onClick={() => setShowViralFilters(true)}>
+                          Ajustar filtros
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 flex flex-wrap gap-2">
+                      {VIRAL_TOPICS.slice(0, 10).map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => {
+                            setViralTopic(t);
+                            runViralSearch(t);
+                          }}
+                          className={
+                            t === viralTopic
+                              ? "px-3 py-1.5 rounded-xl text-sm font-extrabold border border-primary/40 bg-primary/10"
+                              : "px-3 py-1.5 rounded-xl text-sm font-bold border border-border bg-surface text-muted-foreground hover:text-foreground"
+                          }
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {viralError && (
+                    <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
+                      <p className="font-bold">Error al explorar</p>
+                      <p className="text-muted-foreground mt-1">{viralError}</p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {viralLoading &&
+                      Array.from({ length: 8 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="h-[360px] rounded-[20px] border border-border bg-card/40 animate-pulse"
+                        />
+                      ))}
+
+                    {!viralLoading && viralResults.map((v) => <ViralVideoCard key={v.id} video={v} onOpen={setSelected} />)}
+
+                    {!viralLoading && viralResults.length === 0 && (
+                      <div className="col-span-full text-center py-16 text-muted-foreground">
+                        No hay resultados todavía. Probá con “Sorpréndeme” o un topic diferente.
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="rounded-[28px] border border-border bg-card p-8 shadow-elev">
+                  <h2 className="text-2xl font-extrabold">En construcción</h2>
+                  <p className="text-muted-foreground mt-2">Siguiente: guardados y herramientas como viralyt.ai.</p>
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <Button variant="hero" className="rounded-xl" onClick={() => setView("videos")}>
+                      Ir al buscador
+                    </Button>
+                    <Button variant="glowOutline" className="rounded-xl" onClick={() => setShowApiKey(true)}>
+                      Conexión YouTube
+                    </Button>
+                  </div>
+                </div>
+              )}
             </section>
           )}
         </main>
@@ -251,6 +385,17 @@ export default function ViralApp() {
         value={filters}
         onChange={setFilters}
         onApply={() => setShowFilters(false)}
+      />
+
+      <ViralFiltersDialog
+        open={showViralFilters}
+        onOpenChange={setShowViralFilters}
+        value={viralFilters}
+        onChange={setViralFilters}
+        onApply={() => {
+          setShowViralFilters(false);
+          runViralSearch(viralTopic);
+        }}
       />
 
       <ApiKeyDialog

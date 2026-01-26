@@ -2,7 +2,9 @@
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  // NOTE: required by the web client in Lovable environment.
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 

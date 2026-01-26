@@ -11,6 +11,7 @@ import type { ViralFilters, VideoItem } from "./types";
 import { mockVideos } from "./mock";
 import { Button } from "@/components/ui/button";
 import { youtubeSearch } from "@/lib/api/youtube";
+import { aiViralTopic } from "@/lib/api/ai-viral-topics";
 import { useSavedVideos } from "./hooks/useSavedVideos";
 
 const VIRAL_TOPICS = [
@@ -37,12 +38,14 @@ export default function ViralApp() {
   const [liveResults, setLiveResults] = React.useState<VideoItem[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [aiLoading, setAiLoading] = React.useState(false);
 
   // Viral explorer state (own filters + own results)
   const [viralTopic, setViralTopic] = React.useState<string>(VIRAL_TOPICS[0]);
   const [viralResults, setViralResults] = React.useState<VideoItem[]>([]);
   const [viralLoading, setViralLoading] = React.useState(false);
   const [viralError, setViralError] = React.useState<string | null>(null);
+  const [aiCriteria, setAiCriteria] = React.useState<string | null>(null);
   const [showViralFilters, setShowViralFilters] = React.useState(false);
   const [viralFilters, setViralFilters] = React.useState<ViralFilters>({
     minViews: 10_000,
@@ -93,6 +96,54 @@ export default function ViralApp() {
       setLiveResults([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const runViralSearchWith = async (topic: string, nextFilters: ViralFilters) => {
+    const q = topic.trim();
+    if (!q) return;
+
+    setViralLoading(true);
+    setViralError(null);
+    try {
+      const res = await youtubeSearch(q, nextFilters);
+      if ("error" in res) {
+        setViralError(res.error);
+        setViralResults([]);
+        return;
+      }
+      setViralResults(res.data);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Error inesperado";
+      setViralError(msg);
+      setViralResults([]);
+    } finally {
+      setViralLoading(false);
+    }
+  };
+
+  const handleAiViral = async () => {
+    // Preset viral (lo que el usuario pidió): independiente de lo que esté seteado.
+    const preset: ViralFilters = { minViews: 10_000, maxSubs: 200_000, date: "week", type: "short" };
+    setAiLoading(true);
+    setAiCriteria(null);
+    try {
+      const res = await aiViralTopic();
+      if (res.success === false) {
+        setViralError(res.error);
+        return;
+      }
+
+      setViralFilters(preset);
+      setViralTopic(res.topic);
+      setAiCriteria(res.criteria || `Topic sugerido: ${res.topic}`);
+      setView("viral");
+      await runViralSearchWith(res.topic, preset);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Error inesperado";
+      setViralError(msg);
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -177,11 +228,10 @@ export default function ViralApp() {
                       variant="glowOutline"
                       size="xl"
                       className="rounded-2xl"
-                      onClick={() => {
-                        handleSearchWithQuery("IA");
-                      }}
+                      onClick={handleAiViral}
+                      disabled={aiLoading}
                     >
-                      Probar con “IA”
+                      {aiLoading ? "Generando criterio…" : "Probar con “IA”"}
                     </Button>
                   </div>
 
@@ -288,6 +338,12 @@ export default function ViralApp() {
                         <p className="text-muted-foreground mt-2 max-w-2xl">
                           “Sorpréndeme” elige un topic y busca Shorts recientes en canales relativamente pequeños (filtros propios).
                         </p>
+                        {aiCriteria && (
+                          <div className="mt-4 rounded-2xl border border-border bg-surface px-4 py-3">
+                            <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Criterio IA</p>
+                            <p className="mt-1 text-sm text-muted-foreground">{aiCriteria}</p>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex flex-wrap gap-3">

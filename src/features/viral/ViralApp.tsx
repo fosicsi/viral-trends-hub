@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { youtubeSearch } from "@/lib/api/youtube";
 import { aiViralTopic } from "@/lib/api/ai-viral-topics";
 import { useSavedVideos } from "./hooks/useSavedVideos";
+import { formatNumber, getRelativeTime } from "@/lib/format";
 
 const VIRAL_TOPICS = [
   "inteligencia artificial",
@@ -66,6 +67,39 @@ export default function ViralApp() {
   React.useEffect(() => {
     // dark-first by default
     document.documentElement.classList.add("dark");
+  }, []);
+
+  const getSignals = React.useCallback((v: VideoItem) => {
+    const now = Date.now();
+    const publishedMs = Date.parse(v.publishedAt);
+    const ageHours = Number.isFinite(publishedMs) ? Math.max(1, (now - publishedMs) / (1000 * 60 * 60)) : 72;
+    const viewsPerHour = Math.max(1, Math.round(v.views / ageHours));
+
+    // durationString comes as "M:SS" (backend), so we keep parsing simple.
+    const parts = String(v.durationString || "0:00").split(":").map((x) => Number(x));
+    const durSeconds = parts.length >= 2 ? Math.max(0, (parts[0] || 0) * 60 + (parts[1] || 0)) : 0;
+    const durationTag = durSeconds <= 60 ? "Short" : durSeconds <= 10 * 60 ? "Medio" : "Largo";
+
+    const alerts: { title: string; detail: string }[] = [];
+    if (v.channelSubscribers <= 50_000 && v.views >= 200_000) {
+      alerts.push({
+        title: "Canal pequeño + muchas vistas",
+        detail: `${formatNumber(v.channelSubscribers)} subs → ${formatNumber(v.views)} vistas`,
+      });
+    }
+    if (v.growthRatio >= 8) {
+      alerts.push({
+        title: "Relación views/subs alta",
+        detail: `${v.growthRatio.toFixed(1)}x (más vistas que su base de subs)`,
+      });
+    }
+
+    return {
+      ageLabel: getRelativeTime(v.publishedAt),
+      viewsPerHour,
+      durationTag,
+      alerts,
+    };
   }, []);
 
   const previewResults = React.useMemo(() => {
@@ -481,18 +515,50 @@ export default function ViralApp() {
                   </a>
                 </div>
                 <div className="p-5 space-y-3">
-                  <div className="rounded-2xl border border-border bg-surface p-4">
-                    <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Idea</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      En v2 aquí mostramos tags, velocidad real (views/h), y alertas de “canal pequeño con muchas vistas”.
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-border bg-surface p-4">
-                    <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Siguiente paso</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Conectar el buscador real con YouTube Data API (mejor via backend para no exponer la key).
-                    </p>
-                  </div>
+                  {(() => {
+                    const s = getSignals(selected);
+                    return (
+                      <>
+                        <div className="rounded-2xl border border-border bg-surface p-4">
+                          <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Señales rápidas</p>
+                          <div className="mt-3 grid grid-cols-2 gap-2">
+                            <div className="rounded-xl border border-border bg-card/40 px-3 py-2">
+                              <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Velocidad</p>
+                              <p className="mt-1 text-sm font-extrabold">{formatNumber(s.viewsPerHour)}/h</p>
+                              <p className="mt-1 text-[11px] text-muted-foreground">Estimado según antigüedad ({s.ageLabel}).</p>
+                            </div>
+                            <div className="rounded-xl border border-border bg-card/40 px-3 py-2">
+                              <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Tags</p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <span className="px-2 py-1 rounded-lg text-[11px] font-extrabold border border-border bg-surface">
+                                  {s.durationTag}
+                                </span>
+                                <span className="px-2 py-1 rounded-lg text-[11px] font-extrabold border border-border bg-surface">
+                                  {selected.growthRatio.toFixed(1)}x views/subs
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-border bg-surface p-4">
+                          <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Alertas</p>
+                          {s.alerts.length === 0 ? (
+                            <p className="mt-2 text-sm text-muted-foreground">Sin alertas fuertes con estos umbrales.</p>
+                          ) : (
+                            <ul className="mt-3 space-y-2">
+                              {s.alerts.map((a) => (
+                                <li key={a.title} className="rounded-xl border border-border bg-card/40 px-3 py-2">
+                                  <p className="text-sm font-extrabold">{a.title}</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">{a.detail}</p>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </div>

@@ -1,15 +1,19 @@
 import { cn } from "@/lib/utils";
 import type { VideoItem } from "../types";
 import { formatNumber, getRelativeTime } from "@/lib/format";
-import { BarChart2, ExternalLink, Eye, Gem, TrendingUp } from "lucide-react";
+import { BarChart2, Bookmark, ExternalLink, Eye, Gem, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function ViralVideoCard({
   video,
   onOpen,
+  saved,
+  onToggleSave,
 }: {
   video: VideoItem;
   onOpen: (v: VideoItem) => void;
+  saved?: boolean;
+  onToggleSave?: (v: VideoItem) => void;
 }) {
   const viewsPerHour = Math.max(1, Math.round(video.views / 72));
   const vphDisplay = viewsPerHour >= 1000 ? `${(viewsPerHour / 1000).toFixed(1)}K` : String(viewsPerHour);
@@ -65,10 +69,22 @@ export function ViralVideoCard({
           </div>
         </div>
 
-        <Button variant="glowOutline" className="w-full rounded-xl" onClick={() => onOpen(video)}>
-          <BarChart2 size={16} /> Ver señales
-        </Button>
+        <div className="grid grid-cols-1 gap-2">
+          <Button variant="glowOutline" className="w-full rounded-xl" onClick={() => onOpen(video)}>
+            <BarChart2 size={16} /> Ver señales
+          </Button>
+          {onToggleSave && (
+            <Button
+              variant={saved ? "soft" : "outline"}
+              className="w-full rounded-xl"
+              onClick={() => onToggleSave(video)}
+            >
+              <Bookmark size={16} /> {saved ? "Guardado" : "Guardar"}
+            </Button>
+          )}
+        </div>
       </div>
     </article>
   );
 }
+

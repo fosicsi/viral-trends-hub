@@ -530,16 +530,36 @@ export default function ViralApp() {
               </div>
               <div className="grid md:grid-cols-2 gap-0">
                 <div className="bg-surface border-t border-border md:border-t-0 md:border-r p-5">
-                  <img
-                    src={selected.thumbnail}
-                    alt={`Miniatura de ${selected.title}`}
-                    className="w-full rounded-2xl border border-border object-cover"
-                    loading="lazy"
-                  />
+                  {(() => {
+                    // Extract video ID from YouTube URL and create embed URL
+                    const getVideoId = (url: string) => {
+                      const match = url.match(/[?&]v=([^&]+)/);
+                      return match ? match[1] : null;
+                    };
+                    const videoId = getVideoId(selected.url);
+                    const embedUrl = videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0` : null;
+
+                    return embedUrl ? (
+                      <iframe
+                        src={embedUrl}
+                        title={selected.title}
+                        className="w-full aspect-video rounded-2xl border border-border"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    ) : (
+                      <img
+                        src={selected.thumbnail}
+                        alt={`Miniatura de ${selected.title}`}
+                        className="w-full rounded-2xl border border-border object-cover"
+                        loading="lazy"
+                      />
+                    );
+                  })()}
                   <a
                     href={selected.url}
                     target="_blank"
-                     rel="noopener noreferrer"
+                    rel="noopener noreferrer"
                     className="mt-4 block text-sm font-bold text-primary hover:underline"
                   >
                     Abrir en YouTube

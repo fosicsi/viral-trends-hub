@@ -8,6 +8,7 @@ import { ViralFiltersDialog } from "./components/ViralFiltersDialog";
 import { ApiKeyDialog } from "./components/ApiKeyDialog";
 import { ViralSavedView } from "./components/ViralSavedView";
 import { ViralToolsView } from "./components/ViralToolsView";
+import { ViralSortControl, type SortOption } from "./components/ViralSortControl";
 import type { ViralFilters, VideoItem } from "./types";
 import { mockVideos } from "./mock";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ export default function ViralApp() {
   const [showApiKey, setShowApiKey] = React.useState(false);
   const [showFilters, setShowFilters] = React.useState(false);
   const [liveResults, setLiveResults] = React.useState<VideoItem[]>([]);
+  const [sortBy, setSortBy] = React.useState<SortOption>("views");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [aiLoading, setAiLoading] = React.useState(false);
@@ -45,6 +47,7 @@ export default function ViralApp() {
   // Viral explorer state (own filters + own results)
   const [viralTopic, setViralTopic] = React.useState<string>(VIRAL_TOPICS[0]);
   const [viralResults, setViralResults] = React.useState<VideoItem[]>([]);
+  const [viralSortBy, setViralSortBy] = React.useState<SortOption>("views");
   const [viralLoading, setViralLoading] = React.useState(false);
   const [viralError, setViralError] = React.useState<string | null>(null);
   const [aiCriteria, setAiCriteria] = React.useState<string | null>(null);
@@ -98,6 +101,29 @@ export default function ViralApp() {
       alerts,
     };
   }, []);
+
+  const sortVideos = React.useCallback((videos: VideoItem[], sort: SortOption): VideoItem[] => {
+    const sorted = [...videos];
+    switch (sort) {
+      case "views":
+        return sorted.sort((a, b) => b.views - a.views);
+      case "subs":
+        return sorted.sort((a, b) => a.channelSubscribers - b.channelSubscribers);
+      case "recent":
+        return sorted.sort((a, b) => {
+          const dateA = new Date(a.publishedAt).getTime();
+          const dateB = new Date(b.publishedAt).getTime();
+          return dateB - dateA;
+        });
+      case "growth":
+        return sorted.sort((a, b) => b.growthRatio - a.growthRatio);
+      default:
+        return sorted;
+    }
+  }, []);
+
+  const sortedLiveResults = React.useMemo(() => sortVideos(liveResults, sortBy), [liveResults, sortBy, sortVideos]);
+  const sortedViralResults = React.useMemo(() => sortVideos(viralResults, viralSortBy), [viralResults, viralSortBy, sortVideos]);
 
   // Insights are computed in a dedicated UI component.
 
@@ -345,7 +371,12 @@ export default function ViralApp() {
                 onOpenFilters={() => setShowFilters(true)}
               />
 
-              {!loading && liveResults.length > 0 && <NicheInsightsBar items={liveResults} />}
+            {!loading && liveResults.length > 0 && (
+              <>
+                <NicheInsightsBar items={liveResults} />
+                <ViralSortControl value={sortBy} onChange={setSortBy} />
+              </>
+            )}
 
               {error && (
                 <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
@@ -364,7 +395,7 @@ export default function ViralApp() {
                   ))}
 
                 {!loading &&
-                  liveResults.map((v) => (
+              sortedLiveResults.map((v) => (
                     <ViralVideoCard
                       key={v.id}
                       video={v}
@@ -445,6 +476,10 @@ export default function ViralApp() {
                     </div>
                   </div>
 
+                  {!viralLoading && viralResults.length > 0 && (
+                    <ViralSortControl value={viralSortBy} onChange={setViralSortBy} />
+                  )}
+
                   {viralError && (
                     <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
                       <p className="font-bold">Error al explorar</p>
@@ -464,7 +499,7 @@ export default function ViralApp() {
                       ))}
 
                     {!viralLoading &&
-                      viralResults.map((v) => (
+                      sortedViralResults.map((v) => (
                         <ViralVideoCard
                           key={v.id}
                           video={v}

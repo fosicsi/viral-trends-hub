@@ -87,7 +87,7 @@ function computeInsights(items: VideoItem[]) {
   return { avgViews, smallCreatorsCount, topKeywords };
 }
 
-export function NicheInsightsBar({ items }: { items: VideoItem[] }) {
+export function NicheInsightsBar({ items, onKeywordClick }: { items: VideoItem[]; onKeywordClick?: (keyword: string) => void }) {
   const insights = React.useMemo(() => computeInsights(items), [items]);
 
   return (
@@ -106,7 +106,14 @@ export function NicheInsightsBar({ items }: { items: VideoItem[] }) {
               <span className="text-xs text-muted-foreground">—</span>
             ) : (
               insights.topKeywords.map((k) => (
-                <Button key={k} type="button" variant="outline" size="sm" disabled className="rounded-xl">
+                <Button 
+                  key={k} 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  className="rounded-xl hover:bg-primary/10 hover:border-primary/30 cursor-pointer"
+                  onClick={() => onKeywordClick?.(k)}
+                >
                   {k}
                 </Button>
               ))

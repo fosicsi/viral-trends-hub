@@ -21,7 +21,7 @@ export function ViralSortControl({ value, onChange }: Props) {
         </SelectTrigger>
         <SelectContent className="bg-card border-border">
           <SelectItem value="views">Más Vistas</SelectItem>
-          <SelectItem value="subs">Oportunidad (Bajos Subs)</SelectItem>
+          <SelectItem value="subs">Oportunidad / Canales Pequeños</SelectItem>
           <SelectItem value="recent">Más Recientes</SelectItem>
           <SelectItem value="growth">Ratio de Crecimiento</SelectItem>
         </SelectContent>

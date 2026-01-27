@@ -252,6 +252,12 @@ export default function ViralApp() {
     }
   };
 
+  const handleTagClick = (tag: string) => {
+    setQuery(tag);
+    setView("videos");
+    handleSearchWithQuery(tag);
+  };
+
   const runViralSearch = async (topic?: string) => {
     const q = (topic ?? viralTopic).trim();
     if (!q) return;
@@ -297,7 +303,7 @@ export default function ViralApp() {
               <div className="grid lg:grid-cols-2 gap-10 items-center">
                 <div className="space-y-6">
                   <h1 className="text-4xl md:text-6xl font-extrabold leading-[1.02] tracking-tight">
-                    Encuentra temas virales <span className="text-primary">antes</span> de que se agoten.
+                    Encuentra nichos virales <span className="text-primary">antes</span> de que se agoten.
                   </h1>
                   <p className="text-muted-foreground text-lg md:text-xl max-w-xl">
                     Un tablero para descubrir oportunidades en YouTube con señales rápidas: vistas, velocidad y relación
@@ -342,6 +348,7 @@ export default function ViralApp() {
                           showExternalLink={false}
                           saved={isSaved(v.id)}
                           onToggleSave={toggleSaved}
+                          onTagClick={handleTagClick}
                         />
                       ))}
                     </div>
@@ -373,8 +380,8 @@ export default function ViralApp() {
 
             {!loading && liveResults.length > 0 && (
               <>
-                <NicheInsightsBar items={liveResults} />
                 <ViralSortControl value={sortBy} onChange={setSortBy} />
+                <NicheInsightsBar items={liveResults} onKeywordClick={handleTagClick} />
               </>
             )}
 
@@ -402,6 +409,7 @@ export default function ViralApp() {
                       onOpen={setSelected}
                       saved={isSaved(v.id)}
                       onToggleSave={toggleSaved}
+                      onTagClick={handleTagClick}
                     />
                   ))}
 
@@ -487,7 +495,7 @@ export default function ViralApp() {
                     </div>
                   )}
 
-                  {!viralLoading && viralResults.length > 0 && <NicheInsightsBar items={viralResults} />}
+                  {!viralLoading && viralResults.length > 0 && <NicheInsightsBar items={viralResults} onKeywordClick={handleTagClick} />}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {viralLoading &&
@@ -506,6 +514,7 @@ export default function ViralApp() {
                           onOpen={setSelected}
                           saved={isSaved(v.id)}
                           onToggleSave={toggleSaved}
+                          onTagClick={handleTagClick}
                         />
                       ))}
 
@@ -525,6 +534,7 @@ export default function ViralApp() {
                   onToggleSave={toggleSaved}
                   onGoSearch={() => setView("videos")}
                   onClear={clearSaved}
+                  onTagClick={handleTagClick}
                 />
               ) : (
                 <ViralToolsView

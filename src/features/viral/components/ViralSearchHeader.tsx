@@ -36,7 +36,7 @@ export function ViralSearchHeader({ query, onChangeQuery, onSearch, filters, onO
           />
         </div>
         <Button variant="hero" size="xl" className="rounded-2xl" onClick={onSearch}>
-          Buscar
+          Buscar Tendencias
         </Button>
       </div>
 
@@ -48,7 +48,7 @@ export function ViralSearchHeader({ query, onChangeQuery, onSearch, filters, onO
         </div>
 
         <div className="px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-primary text-xs font-bold flex items-center gap-2">
-          <Users size={12} /> -{formatNumber(filters.maxSubs)} subs
+          <Users size={12} /> -{formatNumber(filters.maxSubs)} suscriptores
         </div>
 
         <div className="px-3 py-1.5 rounded-lg bg-brand-2/10 border border-brand-2/20 text-foreground text-xs font-bold flex items-center gap-2">

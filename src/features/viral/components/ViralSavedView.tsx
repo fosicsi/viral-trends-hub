@@ -9,12 +9,14 @@ export function ViralSavedView({
   onToggleSave,
   onGoSearch,
   onClear,
+  onTagClick,
 }: {
   saved: VideoItem[];
   onOpen: (v: VideoItem) => void;
   onToggleSave: (v: VideoItem) => void;
   onGoSearch: () => void;
   onClear: () => void;
+  onTagClick?: (tag: string) => void;
 }) {
   return (
     <div className="space-y-8">
@@ -64,6 +66,7 @@ export function ViralSavedView({
               onOpen={onOpen}
               saved
               onToggleSave={onToggleSave}
+              onTagClick={onTagClick}
             />
           ))}
         </div>

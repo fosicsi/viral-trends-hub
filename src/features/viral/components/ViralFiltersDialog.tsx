@@ -127,7 +127,7 @@ export function ViralFiltersDialog({
             variant="ghost"
             onClick={() => onChange({ minViews: 10_000, maxSubs: 500_000, date: "year", type: "short", order: "viewCount" })}
           >
-            Reset
+            Restablecer
           </Button>
           <div className="flex gap-3">
             <Button variant="soft" onClick={() => onOpenChange(false)}>

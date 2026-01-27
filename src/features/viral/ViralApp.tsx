@@ -3,6 +3,7 @@ import { ViralSidebar, type ViralView } from "./components/ViralSidebar";
 import { ViralTopbar } from "./components/ViralTopbar";
 import { ViralSearchHeader } from "./components/ViralSearchHeader";
 import { ViralVideoCard } from "./components/ViralVideoCard";
+import { NicheInsightsBar } from "./components/NicheInsightsBar";
 import { ViralFiltersDialog } from "./components/ViralFiltersDialog";
 import { ApiKeyDialog } from "./components/ApiKeyDialog";
 import { ViralSavedView } from "./components/ViralSavedView";
@@ -98,80 +99,7 @@ export default function ViralApp() {
     };
   }, []);
 
-  const buildNicheInsights = React.useCallback((items: VideoItem[]) => {
-    const totalViews = items.reduce((acc, v) => acc + (Number.isFinite(v.views) ? v.views : 0), 0);
-    const avgViews = items.length ? totalViews / items.length : 0;
-
-    const stop = new Set([
-      "el",
-      "la",
-      "los",
-      "las",
-      "un",
-      "una",
-      "unos",
-      "unas",
-      "y",
-      "o",
-      "de",
-      "del",
-      "al",
-      "en",
-      "con",
-      "sin",
-      "para",
-      "por",
-      "que",
-      "como",
-      "esto",
-      "esta",
-      "este",
-      "estos",
-      "estas",
-      "lo",
-      "mi",
-      "tu",
-      "sus",
-      "su",
-      "a",
-      "the",
-      "and",
-      "or",
-      "to",
-      "of",
-      "in",
-      "for",
-      "on",
-      "with",
-      "vs",
-    ]);
-
-    const counts = new Map<string, number>();
-    for (const v of items) {
-      const raw = String(v.title || "")
-        .toLowerCase()
-        .replace(/https?:\/\/\S+/g, " ")
-        .replace(/[^\p{L}\p{N}#]+/gu, " ")
-        .trim();
-      for (const w of raw.split(/\s+/g)) {
-        const word = w.startsWith("#") ? w : w;
-        if (!word) continue;
-        if (!word.startsWith("#") && word.length < 3) continue;
-        if (!word.startsWith("#") && stop.has(word)) continue;
-        counts.set(word, (counts.get(word) || 0) + 1);
-      }
-    }
-
-    const keywords = [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([k]) => k);
-
-    return { totalViews, avgViews, keywords };
-  }, []);
-
-  const liveInsights = React.useMemo(() => buildNicheInsights(liveResults), [buildNicheInsights, liveResults]);
-  const viralInsights = React.useMemo(() => buildNicheInsights(viralResults), [buildNicheInsights, viralResults]);
+  // Insights are computed in a dedicated UI component.
 
   const homePreviewShorts = React.useMemo(() => {
     // Criterio "base" con el que se desarrolló la app (oportunidad rápida):
@@ -417,35 +345,7 @@ export default function ViralApp() {
                 onOpenFilters={() => setShowFilters(true)}
               />
 
-              {!loading && liveResults.length > 0 && (
-                <div className="rounded-[24px] border border-border bg-card p-5 shadow-elev">
-                  <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Niche insights (Shorts)</p>
-                  <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="rounded-2xl border border-border bg-surface p-4">
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Total Niche Volume</p>
-                      <p className="mt-1 text-lg font-extrabold">{formatNumber(liveInsights.totalViews)}</p>
-                    </div>
-                    <div className="rounded-2xl border border-border bg-surface p-4">
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Avg. Views</p>
-                      <p className="mt-1 text-lg font-extrabold">{formatNumber(liveInsights.avgViews)}</p>
-                    </div>
-                    <div className="rounded-2xl border border-border bg-surface p-4">
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Common Keywords</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {liveInsights.keywords.length === 0 ? (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        ) : (
-                          liveInsights.keywords.map((k) => (
-                            <span key={k} className="px-2 py-1 rounded-lg text-[11px] font-extrabold border border-border bg-card/40">
-                              {k}
-                            </span>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {!loading && liveResults.length > 0 && <NicheInsightsBar items={liveResults} />}
 
               {error && (
                 <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
@@ -552,6 +452,8 @@ export default function ViralApp() {
                     </div>
                   )}
 
+                  {!viralLoading && viralResults.length > 0 && <NicheInsightsBar items={viralResults} />}
+
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {viralLoading &&
                       Array.from({ length: 8 }).map((_, i) => (
@@ -579,35 +481,7 @@ export default function ViralApp() {
                     )}
                   </div>
 
-                  {!viralLoading && viralResults.length > 0 && (
-                    <div className="rounded-[24px] border border-border bg-card p-5 shadow-elev">
-                      <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Niche insights (Shorts)</p>
-                      <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div className="rounded-2xl border border-border bg-surface p-4">
-                          <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Total Niche Volume</p>
-                          <p className="mt-1 text-lg font-extrabold">{formatNumber(viralInsights.totalViews)}</p>
-                        </div>
-                        <div className="rounded-2xl border border-border bg-surface p-4">
-                          <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Avg. Views</p>
-                          <p className="mt-1 text-lg font-extrabold">{formatNumber(viralInsights.avgViews)}</p>
-                        </div>
-                        <div className="rounded-2xl border border-border bg-surface p-4">
-                          <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Common Keywords</p>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {viralInsights.keywords.length === 0 ? (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            ) : (
-                              viralInsights.keywords.map((k) => (
-                                <span key={k} className="px-2 py-1 rounded-lg text-[11px] font-extrabold border border-border bg-card/40">
-                                  {k}
-                                </span>
-                              ))
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  {/* Insights bar is shown above the grid */}
                 </div>
               ) : view === "saved" ? (
                 <ViralSavedView

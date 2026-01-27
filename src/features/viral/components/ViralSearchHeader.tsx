@@ -28,7 +28,7 @@ export function ViralSearchHeader({ query, onChangeQuery, onSearch, filters, onO
           <Input
             value={query}
             onChange={(e) => onChangeQuery(e.target.value)}
-            placeholder="Enter a niche or hashtag (e.g., #calisthenics)..."
+            placeholder="Busca un nicho o hashtag (ej: #recetas, #futbol)..."
             className="h-12 rounded-2xl pl-11 bg-surface border-border"
             onKeyDown={(e) => {
               if (e.key === "Enter") onSearch();

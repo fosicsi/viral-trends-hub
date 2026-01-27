@@ -92,14 +92,14 @@ export function NicheInsightsBar({ items }: { items: VideoItem[] }) {
 
   return (
     <section className="rounded-[24px] border border-border bg-card p-5 shadow-elev">
-      <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Niche Analysis Summary</p>
+      <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Resumen del Análisis de Nicho</p>
 
       <div className="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* 1) Top keywords */}
         <div className="rounded-2xl border border-border bg-surface p-4">
           <div className="flex items-center gap-2">
             <Sparkles size={16} className="text-accent" />
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Trending Keywords</p>
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Palabras Clave Tendencia</p>
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
             {insights.topKeywords.length === 0 ? (
@@ -118,22 +118,22 @@ export function NicheInsightsBar({ items }: { items: VideoItem[] }) {
         <div className="rounded-2xl border border-border bg-surface p-4">
           <div className="flex items-center gap-2">
             <TrendingUp size={16} className="text-primary" />
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Average Potential</p>
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Potencial Promedio</p>
           </div>
-          <p className="mt-2 text-lg font-extrabold">Niche Potential: {formatNumber(insights.avgViews)} views/video</p>
+          <p className="mt-2 text-lg font-extrabold">Potencial del Nicho: {formatNumber(insights.avgViews)} vistas/video</p>
         </div>
 
         {/* 3) Channel opportunity */}
         <div className="rounded-2xl border border-border bg-surface p-4">
           <div className="flex items-center gap-2">
             <Users size={16} className="text-muted-foreground" />
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Channel Opportunity</p>
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Oportunidad de Canal</p>
           </div>
           <div className="mt-2">
             <span className="inline-flex items-center gap-2 rounded-xl border border-border bg-card/40 px-3 py-2 text-xs font-extrabold">
-              {insights.smallCreatorsCount} videos from small creators found
+              {insights.smallCreatorsCount} videos de creadores pequeños encontrados
             </span>
-            <p className="mt-2 text-xs text-muted-foreground">Small channel = &lt; 5k subs.</p>
+            <p className="mt-2 text-xs text-muted-foreground">Canal pequeño = &lt; 5k subs.</p>
           </div>
         </div>
       </div>

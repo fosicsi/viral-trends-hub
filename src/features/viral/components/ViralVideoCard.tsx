@@ -45,7 +45,7 @@ export function ViralVideoCard({
 
         <div className="flex items-center justify-between text-sm">
           <div className="space-y-0.5">
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Shorts Views</p>
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Vistas de Short</p>
             <div className="flex items-center gap-2 font-bold">
               <Eye size={16} className="text-muted-foreground" /> {formatNumber(video.views)}
             </div>

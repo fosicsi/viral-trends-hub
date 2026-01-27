@@ -10,6 +10,7 @@ type ViralFilters = {
   maxSubs: number;
   date: "week" | "month" | "year" | "all";
   type: "all" | "short" | "medium" | "long";
+  order: "viewCount" | "date";
 };
 
 function toSafeNumber(v: unknown, fallback: number): number {
@@ -24,11 +25,10 @@ function normalizeFilters(input: any): ViralFilters {
     input?.date === "week" || input?.date === "month" || input?.date === "year" || input?.date === "all"
       ? input.date
       : "year";
-  const type: ViralFilters["type"] =
-    input?.type === "all" || input?.type === "short" || input?.type === "medium" || input?.type === "long"
-      ? input.type
-      : "all";
-  return { minViews, maxSubs, date, type };
+  // Shorts-only mode: we still accept the field, but we force it to "short".
+  const type: ViralFilters["type"] = "short";
+  const order: ViralFilters["order"] = input?.order === "date" ? "date" : "viewCount";
+  return { minViews, maxSubs, date, type, order };
 }
 
 type VideoItem = {
@@ -86,33 +86,23 @@ Deno.serve(async (req) => {
     const query = String(body?.query ?? "").trim() || "viral ideas";
     const filters: ViralFilters = normalizeFilters(body?.filters);
 
-    const durationParam =
-      filters.type === "short"
-        ? "&videoDuration=short"
-        : filters.type === "medium"
-          ? "&videoDuration=medium"
-          : filters.type === "long"
-            ? "&videoDuration=long"
-            : "";
+    // Shorts-only (strict): request short bucket from API AND enforce <= 60s below.
+    const durationParam = "&videoDuration=short";
 
     // NOTE: YouTube's `videoDuration=short` means < 4 minutes, but users expect
     // "Shorts" to be <= 60 seconds. We'll enforce that with a post-filter.
-    function matchesType(type: ViralFilters["type"], durSeconds: number): boolean {
-      if (type === "all") return true;
-      if (type === "short") return durSeconds <= 60;
-      // Keep these pragmatic (and closer to user expectations than YouTube's buckets)
-      if (type === "medium") return durSeconds > 60 && durSeconds <= 10 * 60;
-      if (type === "long") return durSeconds > 10 * 60;
-      return true;
+    function matchesType(_type: ViralFilters["type"], durSeconds: number): boolean {
+      return durSeconds <= 60;
     }
 
     const publishedAfter = getPublishedAfterDate(filters.date);
     const dateParam = publishedAfter ? `&publishedAfter=${encodeURIComponent(publishedAfter)}` : "";
 
     const searchUrl =
+      // Note: search.list doesn't include statistics; we fetch stats via videos.list below.
       `https://www.googleapis.com/youtube/v3/search?part=snippet` +
       `&q=${encodeURIComponent(query)}` +
-      `&type=video&maxResults=50&order=viewCount${durationParam}${dateParam}&key=${apiKey}`;
+      `&type=video&maxResults=50&order=${encodeURIComponent(filters.order)}${durationParam}${dateParam}&key=${apiKey}`;
 
     const sRes = await fetch(searchUrl);
     const sData = await sRes.json();

@@ -29,9 +29,6 @@ export function ViralVideoCard({
     >
       <div className="relative aspect-video">
         <img src={video.thumbnail} alt={`Miniatura de ${video.title}`} className="w-full h-full object-cover" loading="lazy" />
-        <div className="absolute bottom-2 right-2 bg-background/70 text-foreground text-[10px] font-extrabold px-2 py-1 rounded-lg border border-border backdrop-blur">
-          {video.durationString}
-        </div>
         {showExternalLink && (
           <a
             href={video.url}
@@ -58,8 +55,11 @@ export function ViralVideoCard({
         </div>
 
         <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-2 font-bold">
-            <Eye size={16} className="text-muted-foreground" /> {formatNumber(video.views)}
+          <div className="space-y-0.5">
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Shorts Views</p>
+            <div className="flex items-center gap-2 font-bold">
+              <Eye size={16} className="text-muted-foreground" /> {formatNumber(video.views)}
+            </div>
           </div>
           <span className="text-xs text-muted-foreground">{getRelativeTime(video.publishedAt)}</span>
         </div>

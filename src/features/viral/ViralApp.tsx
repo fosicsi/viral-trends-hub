@@ -53,13 +53,15 @@ export default function ViralApp() {
     maxSubs: 200_000,
     date: "week",
     type: "short",
+    order: "viewCount",
   });
 
   const [filters, setFilters] = React.useState<ViralFilters>({
     minViews: 10_000,
     maxSubs: 500_000,
     date: "year",
-    type: "all",
+    type: "short",
+    order: "viewCount",
   });
 
   const { saved, isSaved, toggleSaved, clearSaved } = useSavedVideos();
@@ -74,11 +76,6 @@ export default function ViralApp() {
     const publishedMs = Date.parse(v.publishedAt);
     const ageHours = Number.isFinite(publishedMs) ? Math.max(1, (now - publishedMs) / (1000 * 60 * 60)) : 72;
     const viewsPerHour = Math.max(1, Math.round(v.views / ageHours));
-
-    // durationString comes as "M:SS" (backend), so we keep parsing simple.
-    const parts = String(v.durationString || "0:00").split(":").map((x) => Number(x));
-    const durSeconds = parts.length >= 2 ? Math.max(0, (parts[0] || 0) * 60 + (parts[1] || 0)) : 0;
-    const durationTag = durSeconds <= 60 ? "Short" : durSeconds <= 10 * 60 ? "Medio" : "Largo";
 
     const alerts: { title: string; detail: string }[] = [];
     if (v.channelSubscribers <= 50_000 && v.views >= 200_000) {
@@ -97,15 +94,89 @@ export default function ViralApp() {
     return {
       ageLabel: getRelativeTime(v.publishedAt),
       viewsPerHour,
-      durationTag,
       alerts,
     };
   }, []);
 
+  const buildNicheInsights = React.useCallback((items: VideoItem[]) => {
+    const totalViews = items.reduce((acc, v) => acc + (Number.isFinite(v.views) ? v.views : 0), 0);
+    const avgViews = items.length ? totalViews / items.length : 0;
+
+    const stop = new Set([
+      "el",
+      "la",
+      "los",
+      "las",
+      "un",
+      "una",
+      "unos",
+      "unas",
+      "y",
+      "o",
+      "de",
+      "del",
+      "al",
+      "en",
+      "con",
+      "sin",
+      "para",
+      "por",
+      "que",
+      "como",
+      "esto",
+      "esta",
+      "este",
+      "estos",
+      "estas",
+      "lo",
+      "mi",
+      "tu",
+      "sus",
+      "su",
+      "a",
+      "the",
+      "and",
+      "or",
+      "to",
+      "of",
+      "in",
+      "for",
+      "on",
+      "with",
+      "vs",
+    ]);
+
+    const counts = new Map<string, number>();
+    for (const v of items) {
+      const raw = String(v.title || "")
+        .toLowerCase()
+        .replace(/https?:\/\/\S+/g, " ")
+        .replace(/[^\p{L}\p{N}#]+/gu, " ")
+        .trim();
+      for (const w of raw.split(/\s+/g)) {
+        const word = w.startsWith("#") ? w : w;
+        if (!word) continue;
+        if (!word.startsWith("#") && word.length < 3) continue;
+        if (!word.startsWith("#") && stop.has(word)) continue;
+        counts.set(word, (counts.get(word) || 0) + 1);
+      }
+    }
+
+    const keywords = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([k]) => k);
+
+    return { totalViews, avgViews, keywords };
+  }, []);
+
+  const liveInsights = React.useMemo(() => buildNicheInsights(liveResults), [buildNicheInsights, liveResults]);
+  const viralInsights = React.useMemo(() => buildNicheInsights(viralResults), [buildNicheInsights, viralResults]);
+
   const homePreviewShorts = React.useMemo(() => {
     // Criterio "base" con el que se desarrolló la app (oportunidad rápida):
     // Shorts recientes, canales relativamente pequeños y con un mínimo de tracción.
-    const preset: ViralFilters = { minViews: 10_000, maxSubs: 200_000, date: "week", type: "short" };
+    const preset: ViralFilters = { minViews: 10_000, maxSubs: 200_000, date: "week", type: "short", order: "viewCount" };
 
     const now = Date.now();
     const weekMs = 7 * 24 * 60 * 60 * 1000;
@@ -183,7 +254,7 @@ export default function ViralApp() {
 
   const handleAiViral = async () => {
     // Preset viral (lo que el usuario pidió): independiente de lo que esté seteado.
-    const preset: ViralFilters = { minViews: 10_000, maxSubs: 200_000, date: "week", type: "short" };
+    const preset: ViralFilters = { minViews: 10_000, maxSubs: 200_000, date: "week", type: "short", order: "date" };
     setAiLoading(true);
     setAiCriteria(null);
     try {
@@ -346,6 +417,36 @@ export default function ViralApp() {
                 onOpenFilters={() => setShowFilters(true)}
               />
 
+              {!loading && liveResults.length > 0 && (
+                <div className="rounded-[24px] border border-border bg-card p-5 shadow-elev">
+                  <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Niche insights (Shorts)</p>
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="rounded-2xl border border-border bg-surface p-4">
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Total Niche Volume</p>
+                      <p className="mt-1 text-lg font-extrabold">{formatNumber(liveInsights.totalViews)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-border bg-surface p-4">
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Avg. Views</p>
+                      <p className="mt-1 text-lg font-extrabold">{formatNumber(liveInsights.avgViews)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-border bg-surface p-4">
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Common Keywords</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {liveInsights.keywords.length === 0 ? (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        ) : (
+                          liveInsights.keywords.map((k) => (
+                            <span key={k} className="px-2 py-1 rounded-lg text-[11px] font-extrabold border border-border bg-card/40">
+                              {k}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {error && (
                 <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
                   <p className="font-bold">Error al buscar</p>
@@ -477,6 +578,36 @@ export default function ViralApp() {
                       </div>
                     )}
                   </div>
+
+                  {!viralLoading && viralResults.length > 0 && (
+                    <div className="rounded-[24px] border border-border bg-card p-5 shadow-elev">
+                      <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Niche insights (Shorts)</p>
+                      <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="rounded-2xl border border-border bg-surface p-4">
+                          <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Total Niche Volume</p>
+                          <p className="mt-1 text-lg font-extrabold">{formatNumber(viralInsights.totalViews)}</p>
+                        </div>
+                        <div className="rounded-2xl border border-border bg-surface p-4">
+                          <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Avg. Views</p>
+                          <p className="mt-1 text-lg font-extrabold">{formatNumber(viralInsights.avgViews)}</p>
+                        </div>
+                        <div className="rounded-2xl border border-border bg-surface p-4">
+                          <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Common Keywords</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {viralInsights.keywords.length === 0 ? (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            ) : (
+                              viralInsights.keywords.map((k) => (
+                                <span key={k} className="px-2 py-1 rounded-lg text-[11px] font-extrabold border border-border bg-card/40">
+                                  {k}
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : view === "saved" ? (
                 <ViralSavedView
@@ -556,9 +687,6 @@ export default function ViralApp() {
                             <div className="rounded-xl border border-border bg-card/40 px-3 py-2">
                               <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Tags</p>
                               <div className="mt-2 flex flex-wrap gap-2">
-                                <span className="px-2 py-1 rounded-lg text-[11px] font-extrabold border border-border bg-surface">
-                                  {s.durationTag}
-                                </span>
                                 <span className="px-2 py-1 rounded-lg text-[11px] font-extrabold border border-border bg-surface">
                                   {selected.growthRatio.toFixed(1)}x views/subs
                                 </span>

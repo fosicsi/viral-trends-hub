@@ -68,21 +68,19 @@ export function ViralFiltersDialog({
 
           <div className="space-y-6">
             <div className="space-y-3">
-              <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Tipo</Label>
+              <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Orden</Label>
               <div className="grid grid-cols-2 gap-3">
                 {(
                   [
-                    { id: "all", label: "Todos" },
-                    { id: "short", label: "Shorts" },
-                    { id: "medium", label: "Medianos" },
-                    { id: "long", label: "Largos" },
+                    { id: "viewCount", label: "Más vistas" },
+                    { id: "date", label: "Tendencia" },
                   ] as const
                 ).map((opt) => (
                   <button
                     key={opt.id}
-                    onClick={() => set({ type: opt.id })}
+                    onClick={() => set({ order: opt.id })}
                     className={
-                      value.type === opt.id
+                      value.order === opt.id
                         ? "py-3 px-4 rounded-2xl text-sm font-extrabold border border-primary/40 bg-primary/10"
                         : "py-3 px-4 rounded-2xl text-sm font-bold border border-border bg-surface text-muted-foreground hover:text-foreground"
                     }
@@ -91,6 +89,9 @@ export function ViralFiltersDialog({
                   </button>
                 ))}
               </div>
+              <p className="text-xs text-muted-foreground">
+                Nota: la búsqueda está optimizada para Shorts (≤ 60s) de forma estricta.
+              </p>
             </div>
 
             <div className="space-y-3">
@@ -124,7 +125,7 @@ export function ViralFiltersDialog({
         <div className="flex items-center justify-between pt-2">
           <Button
             variant="ghost"
-            onClick={() => onChange({ minViews: 10_000, maxSubs: 500_000, date: "year", type: "all" })}
+            onClick={() => onChange({ minViews: 10_000, maxSubs: 500_000, date: "year", type: "short", order: "viewCount" })}
           >
             Reset
           </Button>

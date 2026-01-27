@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ViralFilters } from "../types";
 import { formatNumber } from "@/lib/format";
-import { Calendar, SlidersHorizontal, Users, Eye, Search } from "lucide-react";
+import { Calendar, SlidersHorizontal, Users, Eye, Search, ArrowUpDown } from "lucide-react";
 
 type Props = {
   query: string;
@@ -28,7 +28,7 @@ export function ViralSearchHeader({ query, onChangeQuery, onSearch, filters, onO
           <Input
             value={query}
             onChange={(e) => onChangeQuery(e.target.value)}
-            placeholder="Ej: Fitness, Finanzas, Mascotas…"
+            placeholder="Enter a niche or hashtag (e.g., #calisthenics)..."
             className="h-12 rounded-2xl pl-11 bg-surface border-border"
             onKeyDown={(e) => {
               if (e.key === "Enter") onSearch();
@@ -54,6 +54,11 @@ export function ViralSearchHeader({ query, onChangeQuery, onSearch, filters, onO
         <div className="px-3 py-1.5 rounded-lg bg-brand-2/10 border border-brand-2/20 text-foreground text-xs font-bold flex items-center gap-2">
           <Calendar size={12} className="text-foreground/80" />
           {filters.date === "week" ? "Semana" : filters.date === "month" ? "Mes" : filters.date === "year" ? "Año" : "Siempre"}
+        </div>
+
+        <div className="px-3 py-1.5 rounded-lg bg-card border border-border text-foreground text-xs font-bold flex items-center gap-2">
+          <ArrowUpDown size={12} className="text-muted-foreground" />
+          {filters.order === "date" ? "Tendencia" : "Más vistas"}
         </div>
 
         <Button

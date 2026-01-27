@@ -27,17 +27,18 @@ export function ViralVideoCard({
         "hover:border-primary/40 transition-all duration-300 group shadow-elev",
       )}
     >
-      <div className="relative aspect-video">
+      <div className="relative aspect-video cursor-pointer" onClick={() => onOpen(video)}>
         <img src={video.thumbnail} alt={`Miniatura de ${video.title}`} className="w-full h-full object-cover" loading="lazy" />
         {showExternalLink && (
           <a
             href={video.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="absolute inset-0 bg-background/10 opacity-0 group-hover:opacity-100 transition-opacity grid place-items-center"
+            className="absolute top-2 right-2 bg-background/80 hover:bg-background border border-border rounded-xl p-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
             aria-label="Abrir en YouTube"
+            onClick={(e) => e.stopPropagation()}
           >
-            <ExternalLink className="text-foreground" size={28} />
+            <ExternalLink className="text-foreground" size={16} />
           </a>
         )}
       </div>

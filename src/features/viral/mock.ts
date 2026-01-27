@@ -1,9 +1,5 @@
 import type { VideoItem } from "./types";
 
-function youtubeSearchUrl(query: string) {
-  return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-}
-
 export const mockVideos: VideoItem[] = [
   {
     id: "a1",
@@ -15,7 +11,7 @@ export const mockVideos: VideoItem[] = [
     durationString: "8:14",
     thumbnail:
       "https://images.unsplash.com/photo-1517832207067-4db24a2ae47c?auto=format&fit=crop&w=1200&q=80",
-    url: youtubeSearchUrl("Probé 7 rutinas de 5 minutos"),
+    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     growthRatio: 8.8,
   },
   {
@@ -28,7 +24,7 @@ export const mockVideos: VideoItem[] = [
     durationString: "12:31",
     thumbnail:
       "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80",
-    url: youtubeSearchUrl("3 ideas de IA para ganar tiempo"),
+    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     growthRatio: 9.1,
   },
   {
@@ -41,7 +37,7 @@ export const mockVideos: VideoItem[] = [
     durationString: "10:02",
     thumbnail:
       "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80",
-    url: youtubeSearchUrl("Los 5 gadgets que están explotando"),
+    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     growthRatio: 5.7,
   },
   {
@@ -54,7 +50,7 @@ export const mockVideos: VideoItem[] = [
     durationString: "0:43",
     thumbnail:
       "https://images.unsplash.com/photo-1506368249639-73a05d6f6488?auto=format&fit=crop&w=1200&q=80",
-    url: youtubeSearchUrl("truco de cocina que nadie te dijo"),
+    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     growthRatio: 27.8,
   },
   {
@@ -67,7 +63,7 @@ export const mockVideos: VideoItem[] = [
     durationString: "0:55",
     thumbnail:
       "https://images.unsplash.com/photo-1526378722484-bd91ca387e72?auto=format&fit=crop&w=1200&q=80",
-    url: youtubeSearchUrl("1 prompt para títulos que suben el CTR"),
+    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     growthRatio: 14.2,
   },
   {
@@ -80,7 +76,7 @@ export const mockVideos: VideoItem[] = [
     durationString: "0:37",
     thumbnail:
       "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80",
-    url: youtubeSearchUrl("métrica que delata un vídeo con potencial"),
+    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     growthRatio: 11.6,
   },
   {
@@ -93,7 +89,7 @@ export const mockVideos: VideoItem[] = [
     durationString: "0:29",
     thumbnail:
       "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80",
-    url: youtubeSearchUrl("hooks para retener en 2 segundos"),
+    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     growthRatio: 18.9,
   },
 ];

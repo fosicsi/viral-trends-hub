@@ -531,17 +531,31 @@ export default function ViralApp() {
               <div className="grid md:grid-cols-2 gap-0">
                 <div className="bg-surface border-t border-border md:border-t-0 md:border-r p-5">
                   {(() => {
-                    // Extract video ID from YouTube URL and create embed URL
-                    const getVideoId = (url: string) => {
-                      const match = url.match(/[?&]v=([^&]+)/);
-                      return match ? match[1] : null;
+                    // Convert any YouTube URL format to embed URL
+                    const getEmbedUrl = (url: string) => {
+                      // Handle standard "watch?v=" URLs
+                      if (url.includes("watch?v=")) {
+                        const videoId = url.split("watch?v=")[1].split("&")[0];
+                        return `https://www.youtube.com/embed/${videoId}`;
+                      }
+                      // Handle "shorts/" URLs
+                      if (url.includes("/shorts/")) {
+                        const videoId = url.split("/shorts/")[1].split("?")[0];
+                        return `https://www.youtube.com/embed/${videoId}`;
+                      }
+                      // Handle "youtu.be/" URLs
+                      if (url.includes("youtu.be/")) {
+                        const videoId = url.split("youtu.be/")[1].split("?")[0];
+                        return `https://www.youtube.com/embed/${videoId}`;
+                      }
+                      // Return null for unsupported formats (e.g., search URLs)
+                      return null;
                     };
-                    const videoId = getVideoId(selected.url);
-                    const embedUrl = videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0` : null;
+                    const embedUrl = getEmbedUrl(selected.url);
 
                     return embedUrl ? (
                       <iframe
-                        src={embedUrl}
+                        src={`${embedUrl}?autoplay=0&rel=0`}
                         title={selected.title}
                         className="w-full aspect-video rounded-2xl border border-border"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

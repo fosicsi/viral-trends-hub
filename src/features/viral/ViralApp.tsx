@@ -302,8 +302,8 @@ export default function ViralApp() {
             <section className="max-w-7xl mx-auto px-6 md:px-10 py-10">
               <div className="grid lg:grid-cols-2 gap-10 items-center">
                 <div className="space-y-6">
-                  <h1 className="text-4xl md:text-6xl font-extrabold leading-[1.02] tracking-tight">
-                    Encuentra nichos virales <span className="text-primary">antes</span> de que se agoten.
+                  <h1 className="text-4xl md:text-6xl font-extrabold leading-[1.02] tracking-tight text-white">
+                    Encuentra <span className="text-primary">nichos virales</span> antes de que se agoten
                   </h1>
                   <p className="text-muted-foreground text-lg md:text-xl max-w-xl">
                     Un tablero para descubrir oportunidades en YouTube con señales rápidas: vistas, velocidad y relación

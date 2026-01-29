@@ -44,6 +44,42 @@ export type Database = {
         }
         Relationships: []
       }
+      videos: {
+        Row: {
+          channel: string
+          channel_subscribers: number
+          created_at: string
+          id: string
+          thumbnail: string
+          title: string
+          url: string
+          views: number
+          youtube_video_id: string
+        }
+        Insert: {
+          channel: string
+          channel_subscribers?: number
+          created_at?: string
+          id?: string
+          thumbnail: string
+          title: string
+          url: string
+          views?: number
+          youtube_video_id: string
+        }
+        Update: {
+          channel?: string
+          channel_subscribers?: number
+          created_at?: string
+          id?: string
+          thumbnail?: string
+          title?: string
+          url?: string
+          views?: number
+          youtube_video_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

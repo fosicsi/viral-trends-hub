@@ -44,6 +44,55 @@ export type Database = {
         }
         Relationships: []
       }
+      // 👇 AGREGAMOS ESTA TABLA NUEVA
+      videos: {
+        Row: {
+          id: string
+          created_at: string
+          updated_at: string
+          youtube_video_id: string | null
+          title: string | null
+          channel: string | null        
+          channel_subscribers: number   
+          views: number                 
+          published_at: string | null
+          duration_seconds: number | null
+          thumbnail: string | null      
+          url: string | null
+          growth_ratio: number | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          youtube_video_id?: string | null
+          title?: string | null
+          channel?: string | null
+          channel_subscribers?: number
+          views?: number
+          published_at?: string | null
+          duration_seconds?: number | null
+          thumbnail?: string | null
+          url?: string | null
+          growth_ratio?: number | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          youtube_video_id?: string | null
+          title?: string | null
+          channel?: string | null
+          channel_subscribers?: number
+          views?: number
+          published_at?: string | null
+          duration_seconds?: number | null
+          thumbnail?: string | null
+          url?: string | null
+          growth_ratio?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -44,52 +44,39 @@ export type Database = {
         }
         Relationships: []
       }
-      // 👇 AGREGAMOS ESTA TABLA NUEVA
       videos: {
         Row: {
-          id: string
+          channel: string
+          channel_subscribers: number
           created_at: string
-          updated_at: string
-          youtube_video_id: string | null
-          title: string | null
-          channel: string | null        
-          channel_subscribers: number   
-          views: number                 
-          published_at: string | null
-          duration_seconds: number | null
-          thumbnail: string | null      
-          url: string | null
-          growth_ratio: number | null
+          id: string
+          thumbnail: string
+          title: string
+          url: string
+          views: number
+          youtube_video_id: string
         }
         Insert: {
-          id?: string
-          created_at?: string
-          updated_at?: string
-          youtube_video_id?: string | null
-          title?: string | null
-          channel?: string | null
+          channel: string
           channel_subscribers?: number
+          created_at?: string
+          id?: string
+          thumbnail: string
+          title: string
+          url: string
           views?: number
-          published_at?: string | null
-          duration_seconds?: number | null
-          thumbnail?: string | null
-          url?: string | null
-          growth_ratio?: number | null
+          youtube_video_id: string
         }
         Update: {
-          id?: string
-          created_at?: string
-          updated_at?: string
-          youtube_video_id?: string | null
-          title?: string | null
-          channel?: string | null
+          channel?: string
           channel_subscribers?: number
+          created_at?: string
+          id?: string
+          thumbnail?: string
+          title?: string
+          url?: string
           views?: number
-          published_at?: string | null
-          duration_seconds?: number | null
-          thumbnail?: string | null
-          url?: string | null
-          growth_ratio?: number | null
+          youtube_video_id?: string
         }
         Relationships: []
       }

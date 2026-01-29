@@ -49,16 +49,16 @@ export function useSavedVideos() {
         .from('videos') // La tabla que creó Lovable
         .insert({
           title: video.title,
-          url: video.url || video.id, // Aseguramos que haya URL
+          url: video.url || video.id, // fallback defensivo
           youtube_video_id: video.id, // Usamos el ID del video
           
           // Nombres alineados con la tabla nueva:
-          channel: video.channel || video.channelTitle,
-          views: Number(video.views || video.viewCount || 0),
+          channel: video.channel,
+          views: Number(video.views || 0),
           thumbnail: video.thumbnail,
           
           // 💎 EL DATO ESTRELLA QUE QUERÍAS:
-          channel_subscribers: Number(video.channelSubscribers || video.subscribers || 0)
+          channel_subscribers: Number(video.channelSubscribers || 0)
         });
 
       if (error) {

@@ -12,6 +12,8 @@ import { ViralSortControl, type SortOption } from "./components/ViralSortControl
 import type { ViralFilters, VideoItem } from "./types";
 import { mockVideos } from "./mock";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
 import { youtubeSearch } from "@/lib/api/youtube";
 import { aiViralTopic } from "@/lib/api/ai-viral-topics";
 import { useSavedVideos } from "./hooks/useSavedVideos";
@@ -46,6 +48,7 @@ export default function ViralApp() {
 
   // Viral explorer state (own filters + own results)
   const [viralTopic, setViralTopic] = React.useState<string>(VIRAL_TOPICS[0]);
+  const [viralInput, setViralInput] = React.useState<string>(""); 
   const [viralResults, setViralResults] = React.useState<VideoItem[]>([]);
   const [viralSortBy, setViralSortBy] = React.useState<SortOption>("views");
   const [viralLoading, setViralLoading] = React.useState(false);
@@ -125,13 +128,8 @@ export default function ViralApp() {
   const sortedLiveResults = React.useMemo(() => sortVideos(liveResults, sortBy), [liveResults, sortBy, sortVideos]);
   const sortedViralResults = React.useMemo(() => sortVideos(viralResults, viralSortBy), [viralResults, viralSortBy, sortVideos]);
 
-  // Insights are computed in a dedicated UI component.
-
   const homePreviewShorts = React.useMemo(() => {
-    // Criterio "base" con el que se desarrolló la app (oportunidad rápida):
-    // Shorts recientes, canales relativamente pequeños y con un mínimo de tracción.
     const preset: ViralFilters = { minViews: 10_000, maxSubs: 200_000, date: "week", type: "short", order: "viewCount" };
-
     const now = Date.now();
     const weekMs = 7 * 24 * 60 * 60 * 1000;
 
@@ -207,7 +205,6 @@ export default function ViralApp() {
   };
 
   const handleAiViral = async () => {
-    // Preset viral (lo que el usuario pidió): independiente de lo que esté seteado.
     const preset: ViralFilters = { minViews: 10_000, maxSubs: 200_000, date: "week", type: "short", order: "date" };
     setAiLoading(true);
     setAiCriteria(null);
@@ -220,6 +217,7 @@ export default function ViralApp() {
 
       setViralFilters(preset);
       setViralTopic(res.topic);
+      setViralInput(res.topic);
       setAiCriteria(res.criteria || `Topic sugerido: ${res.topic}`);
       setView("viral");
       await runViralSearchWith(res.topic, preset);
@@ -259,7 +257,8 @@ export default function ViralApp() {
   };
 
   const runViralSearch = async (topic?: string) => {
-    const q = (topic ?? viralTopic).trim();
+    // CORRECCIÓN AQUÍ: Usamos solo || para evitar conflicto de precedencia
+    const q = (topic || viralInput || viralTopic).trim();
     if (!q) return;
 
     setViralLoading(true);
@@ -281,12 +280,10 @@ export default function ViralApp() {
     }
   };
 
-  // Auto-buscar al entrar en Explorador Viral (una vez por entrada)
   React.useEffect(() => {
     if (view !== "viral") return;
     if (viralResults.length > 0 || viralLoading) return;
     runViralSearch(viralTopic);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
   return (
@@ -311,7 +308,7 @@ export default function ViralApp() {
                   </p>
 
                   <div className="flex flex-col sm:flex-row gap-3">
-                    <Button variant="hero" size="xl" className="rounded-2xl" onClick={() => setView("videos")}>
+                    <Button variant="hero" size="xl" className="rounded-2xl" onClick={() => setView("viral")}>
                       Empezar a buscar
                     </Button>
                     <Button
@@ -324,8 +321,6 @@ export default function ViralApp() {
                       {aiLoading ? "Generando criterio…" : "Probar con “IA”"}
                     </Button>
                   </div>
-
-
                 </div>
 
                 <div className="relative">
@@ -385,13 +380,6 @@ export default function ViralApp() {
               </>
             )}
 
-              {error && (
-                <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
-                  <p className="font-bold">Error al buscar</p>
-                  <p className="text-muted-foreground mt-1">{error}</p>
-                </div>
-              )}
-
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {loading &&
                   Array.from({ length: 8 }).map((_, i) => (
@@ -412,12 +400,6 @@ export default function ViralApp() {
                       onTagClick={handleTagClick}
                     />
                   ))}
-
-                {!loading && liveResults.length === 0 && (
-                  <div className="col-span-full text-center py-16 text-muted-foreground">
-                    No hay resultados con estos filtros. Prueba bajando el mínimo de vistas o subiendo el máximo de subs.
-                  </div>
-                )}
               </div>
             </section>
           )}
@@ -427,13 +409,38 @@ export default function ViralApp() {
               {view === "viral" ? (
                 <div className="space-y-8">
                   <div className="rounded-[28px] border border-border bg-card p-8 shadow-elev">
-                    <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+                    <div className="space-y-6">
+                      
+                      {/* TÍTULO Y DESCRIPCIÓN */}
                       <div>
                         <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">Explorador Viral</h2>
                         <p className="text-muted-foreground mt-2 max-w-2xl">
                           “Sorpréndeme” elige un topic y busca Shorts recientes en canales relativamente pequeños (filtros propios).
                         </p>
-                        {aiCriteria && (
+                      </div>
+
+                      {/* --- NUEVA BARRA DE BÚSQUEDA --- */}
+                      <div className="flex gap-2 w-full">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
+                          <Input
+                            placeholder="Busca cualquier nicho..."
+                            className="pl-10 h-14 text-lg rounded-2xl bg-surface/50 border-border"
+                            value={viralInput}
+                            onChange={(e) => setViralInput(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && runViralSearch()}
+                          />
+                        </div>
+                        <Button className="h-14 rounded-2xl px-6 font-bold" onClick={() => runViralSearch()} disabled={viralLoading}>
+                          {viralLoading ? "..." : "Explorar"}
+                        </Button>
+                        <Button variant="glowOutline" className="h-14 rounded-2xl px-6" onClick={() => setShowViralFilters(true)}>
+                          Ajustar filtros
+                        </Button>
+                      </div>
+
+                      {/* CRITERIO IA */}
+                      {aiCriteria && (
                           <div className="mt-4 rounded-2xl border border-border bg-surface px-4 py-3">
                             <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
                               Criterio IA (por qué este topic puede rendir)
@@ -443,89 +450,64 @@ export default function ViralApp() {
                             </p>
                             <p className="mt-2 text-sm text-muted-foreground">{aiCriteria}</p>
                           </div>
-                        )}
-                      </div>
+                      )}
 
-                      <div className="flex flex-wrap gap-3">
+                      {/* BOTÓN SORPRÉNDEME + TAGS */}
+                      <div className="flex items-center justify-between pt-2">
+                        <div className="flex flex-wrap gap-2">
+                            {VIRAL_TOPICS.slice(0, 10).map((t) => (
+                                <button
+                                    key={t}
+                                    onClick={() => {
+                                        setViralTopic(t);
+                                        setViralInput(t);
+                                        runViralSearch(t);
+                                    }}
+                                    className={
+                                        t === viralTopic
+                                            ? "px-3 py-1.5 rounded-xl text-sm font-extrabold border border-primary/40 bg-primary/10"
+                                            : "px-3 py-1.5 rounded-xl text-sm font-bold border border-border bg-surface text-muted-foreground hover:text-foreground"
+                                    }
+                                >
+                                    {t}
+                                </button>
+                            ))}
+                        </div>
                         <Button
-                          variant="hero"
-                          className="rounded-2xl"
-                          onClick={() => {
-                            const next = VIRAL_TOPICS[Math.floor(Math.random() * VIRAL_TOPICS.length)];
-                            setViralTopic(next);
-                            runViralSearch(next);
-                          }}
+                            variant="hero"
+                            className="rounded-xl shrink-0"
+                            onClick={() => {
+                                const next = VIRAL_TOPICS[Math.floor(Math.random() * VIRAL_TOPICS.length)];
+                                setViralTopic(next);
+                                setViralInput(next);
+                                runViralSearch(next);
+                            }}
                         >
-                          Sorpréndeme
-                        </Button>
-                        <Button variant="glowOutline" className="rounded-2xl" onClick={() => setShowViralFilters(true)}>
-                          Ajustar filtros
+                            Sorpréndeme
                         </Button>
                       </div>
-                    </div>
 
-                    <div className="mt-6 flex flex-wrap gap-2">
-                      {VIRAL_TOPICS.slice(0, 10).map((t) => (
-                        <button
-                          key={t}
-                          onClick={() => {
-                            setViralTopic(t);
-                            runViralSearch(t);
-                          }}
-                          className={
-                            t === viralTopic
-                              ? "px-3 py-1.5 rounded-xl text-sm font-extrabold border border-primary/40 bg-primary/10"
-                              : "px-3 py-1.5 rounded-xl text-sm font-bold border border-border bg-surface text-muted-foreground hover:text-foreground"
-                          }
-                        >
-                          {t}
-                        </button>
-                      ))}
                     </div>
                   </div>
 
                   {!viralLoading && viralResults.length > 0 && (
-                    <ViralSortControl value={viralSortBy} onChange={setViralSortBy} />
-                  )}
-
-                  {viralError && (
-                    <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
-                      <p className="font-bold">Error al explorar</p>
-                      <p className="text-muted-foreground mt-1">{viralError}</p>
-                    </div>
-                  )}
-
-                  {!viralLoading && viralResults.length > 0 && <NicheInsightsBar items={viralResults} onKeywordClick={handleTagClick} />}
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {viralLoading &&
-                      Array.from({ length: 8 }).map((_, i) => (
-                        <div
-                          key={i}
-                          className="h-[360px] rounded-[20px] border border-border bg-card/40 animate-pulse"
-                        />
-                      ))}
-
-                    {!viralLoading &&
-                      sortedViralResults.map((v) => (
-                        <ViralVideoCard
-                          key={v.id}
-                          video={v}
-                          onOpen={setSelected}
-                          saved={isSaved(v.id)}
-                          onToggleSave={toggleSaved}
-                          onTagClick={handleTagClick}
-                        />
-                      ))}
-
-                    {!viralLoading && viralResults.length === 0 && (
-                      <div className="col-span-full text-center py-16 text-muted-foreground">
-                        No hay resultados todavía. Probá con “Sorpréndeme” o un topic diferente.
+                    <>
+                      <ViralSortControl value={viralSortBy} onChange={setViralSortBy} />
+                      <NicheInsightsBar items={viralResults} onKeywordClick={handleTagClick} />
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                          {sortedViralResults.map((v) => (
+                              <ViralVideoCard
+                                  key={v.id}
+                                  video={v}
+                                  onOpen={setSelected}
+                                  saved={isSaved(v.id)}
+                                  onToggleSave={toggleSaved}
+                                  onTagClick={handleTagClick}
+                              />
+                          ))}
                       </div>
-                    )}
-                  </div>
-
-                  {/* Insights bar is shown above the grid */}
+                    </>
+                  )}
                 </div>
               ) : view === "saved" ? (
                 <ViralSavedView
@@ -560,7 +542,6 @@ export default function ViralApp() {
           )}
         </main>
 
-        {/* Simple “details” for v1 */}
         {selected && (
           <div className="fixed inset-0 z-50 grid place-items-center bg-background/60 backdrop-blur p-4">
             <div className="w-full max-w-3xl rounded-3xl border border-border bg-card shadow-glow overflow-hidden">
@@ -575,52 +556,13 @@ export default function ViralApp() {
               </div>
               <div className="grid md:grid-cols-2 gap-0">
                 <div className="bg-surface border-t border-border md:border-t-0 md:border-r p-5">
-                  {(() => {
-                    // Convert any YouTube URL format to embed URL
-                    const getEmbedUrl = (url: string) => {
-                      // Handle standard "watch?v=" URLs
-                      if (url.includes("watch?v=")) {
-                        const videoId = url.split("watch?v=")[1].split("&")[0];
-                        return `https://www.youtube.com/embed/${videoId}`;
-                      }
-                      // Handle "shorts/" URLs
-                      if (url.includes("/shorts/")) {
-                        const videoId = url.split("/shorts/")[1].split("?")[0];
-                        return `https://www.youtube.com/embed/${videoId}`;
-                      }
-                      // Handle "youtu.be/" URLs
-                      if (url.includes("youtu.be/")) {
-                        const videoId = url.split("youtu.be/")[1].split("?")[0];
-                        return `https://www.youtube.com/embed/${videoId}`;
-                      }
-                      // Return null for unsupported formats (e.g., search URLs)
-                      return null;
-                    };
-                    const embedUrl = getEmbedUrl(selected.url);
-
-                    return embedUrl ? (
-                      <iframe
-                        src={`${embedUrl}?autoplay=0&rel=0`}
+                    <iframe
+                        src={`https://www.youtube.com/embed/${selected.youtubeVideoId}`}
                         title={selected.title}
                         className="w-full aspect-video rounded-2xl border border-border"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowFullScreen
-                      />
-                    ) : (
-                      <img
-                        src={selected.thumbnail}
-                        alt={`Miniatura de ${selected.title}`}
-                        className="w-full rounded-2xl border border-border object-cover"
-                        loading="lazy"
-                      />
-                    );
-                  })()}
-                  <a
-                    href={selected.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-4 block text-sm font-bold text-primary hover:underline"
-                  >
+                    />
+                  <a href={selected.url} target="_blank" rel="noopener noreferrer" className="mt-4 block text-sm font-bold text-primary hover:underline">
                     Abrir en YouTube
                   </a>
                 </div>
@@ -635,33 +577,12 @@ export default function ViralApp() {
                             <div className="rounded-xl border border-border bg-card/40 px-3 py-2">
                               <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Velocidad</p>
                               <p className="mt-1 text-sm font-extrabold">{formatNumber(s.viewsPerHour)}/h</p>
-                              <p className="mt-1 text-[11px] text-muted-foreground">Estimado según antigüedad ({s.ageLabel}).</p>
                             </div>
                             <div className="rounded-xl border border-border bg-card/40 px-3 py-2">
-                              <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Tags</p>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                <span className="px-2 py-1 rounded-lg text-[11px] font-extrabold border border-border bg-surface">
-                                  {selected.growthRatio.toFixed(1)}x views/subs
-                                </span>
-                              </div>
+                              <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Crecimiento</p>
+                              <p className="mt-1 text-sm font-extrabold">{selected.growthRatio.toFixed(1)}x</p>
                             </div>
                           </div>
-                        </div>
-
-                        <div className="rounded-2xl border border-border bg-surface p-4">
-                          <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Alertas</p>
-                          {s.alerts.length === 0 ? (
-                            <p className="mt-2 text-sm text-muted-foreground">Sin alertas fuertes con estos umbrales.</p>
-                          ) : (
-                            <ul className="mt-3 space-y-2">
-                              {s.alerts.map((a) => (
-                                <li key={a.title} className="rounded-xl border border-border bg-card/40 px-3 py-2">
-                                  <p className="text-sm font-extrabold">{a.title}</p>
-                                  <p className="text-xs text-muted-foreground mt-0.5">{a.detail}</p>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
                         </div>
                       </>
                     );
@@ -673,34 +594,9 @@ export default function ViralApp() {
         )}
       </div>
 
-      <ViralFiltersDialog
-        open={showFilters}
-        onOpenChange={setShowFilters}
-        value={filters}
-        onChange={setFilters}
-        onApply={() => {
-          setShowFilters(false);
-          // Re-run search so the user immediately sees the effect of the new parameters.
-          // Only do it when the user is in the Search view.
-          if (view === "videos") handleSearch();
-        }}
-      />
-
-      <ViralFiltersDialog
-        open={showViralFilters}
-        onOpenChange={setShowViralFilters}
-        value={viralFilters}
-        onChange={setViralFilters}
-        onApply={() => {
-          setShowViralFilters(false);
-          runViralSearch(viralTopic);
-        }}
-      />
-
-      <ApiKeyDialog
-        open={showApiKey}
-        onOpenChange={setShowApiKey}
-      />
+      <ViralFiltersDialog open={showFilters} onOpenChange={setShowFilters} value={filters} onChange={setFilters} onApply={() => { setShowFilters(false); if (view === "videos") handleSearch(); }} />
+      <ViralFiltersDialog open={showViralFilters} onOpenChange={setShowViralFilters} value={viralFilters} onChange={setViralFilters} onApply={() => { setShowViralFilters(false); runViralSearch(viralTopic); }} />
+      <ApiKeyDialog open={showApiKey} onOpenChange={setShowApiKey} />
     </div>
   );
 }

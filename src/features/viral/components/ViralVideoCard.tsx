@@ -1,120 +1,118 @@
-import * as React from "react";
-import { cn } from "@/lib/utils";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Eye, TrendingUp, BarChart2, Bookmark, PlayCircle } from "lucide-react";
 import type { VideoItem } from "../types";
 import { formatNumber, getRelativeTime } from "@/lib/format";
-import { BarChart2, Bookmark, ExternalLink, Eye, Gem, TrendingUp } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
-function extractTags(title: string): string[] {
-  const tags: string[] = [];
-  // Extract hashtags
-  const hashtagRegex = /#[\w\u00C0-\u017F]+/g;
-  const hashtags = title.match(hashtagRegex);
-  if (hashtags) {
-    tags.push(...hashtags);
-  }
-  return tags;
+interface ViralVideoCardProps {
+  video: VideoItem;
+  onOpen: (video: VideoItem) => void;
+  saved?: boolean;
+  onToggleSave?: (video: VideoItem) => void;
+  onTagClick?: (tag: string) => void;
+  showExternalLink?: boolean;
 }
 
-export function ViralVideoCard({
-  video,
-  onOpen,
-  saved,
-  onToggleSave,
-  showExternalLink = true,
-  onTagClick,
-}: {
-  video: VideoItem;
-  onOpen: (v: VideoItem) => void;
-  saved?: boolean;
-  onToggleSave?: (v: VideoItem) => void;
-  showExternalLink?: boolean;
-  onTagClick?: (tag: string) => void;
-}) {
-  const viewsPerHour = Math.max(1, Math.round(video.views / 72));
-  const vphDisplay = viewsPerHour >= 1000 ? `${(viewsPerHour / 1000).toFixed(1)}K` : String(viewsPerHour);
-  const tags = React.useMemo(() => extractTags(video.title), [video.title]);
+export function ViralVideoCard({ video, onOpen, saved = false, onToggleSave, onTagClick }: ViralVideoCardProps) {
+  
+  const now = Date.now();
+  const publishedMs = Date.parse(video.publishedAt);
+  const ageHours = Math.max(1, (now - publishedMs) / (1000 * 60 * 60));
+  const viewsPerHour = Math.round(video.views / ageHours);
+  
+  const ratio = video.growthRatio || (video.channelSubscribers > 0 ? video.views / video.channelSubscribers : 0);
+
+  const isViral = ratio > 10 || viewsPerHour > 2000;
 
   return (
-    <article
-      className={cn(
-        "bg-card border border-border rounded-[20px] overflow-hidden",
-        "hover:border-primary/40 transition-all duration-300 group shadow-elev",
-      )}
+    <Card 
+      className="group relative overflow-hidden border-border/60 bg-card hover:border-primary/50 transition-all duration-300 hover:shadow-xl flex flex-col h-full rounded-[24px]"
     >
-      <div className="relative aspect-video cursor-pointer" onClick={() => onOpen(video)}>
-        <img src={video.thumbnail} alt={`Miniatura de ${video.title}`} className="w-full h-full object-cover" loading="lazy" />
+      {/* 1. THUMBNAIL */}
+      <div className="relative aspect-video overflow-hidden bg-zinc-900 cursor-pointer" onClick={() => onOpen(video)}>
+        <img 
+          src={video.thumbnail} 
+          alt={video.title} 
+          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100"
+          loading="lazy"
+        />
+        
+        <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100">
+                <PlayCircle className="w-6 h-6 fill-current" />
+            </div>
+        </div>
+
+        <div className="absolute top-3 right-3 flex gap-2">
+            {isViral && (
+                <Badge className="bg-red-500 hover:bg-red-600 text-white border-0 shadow-lg px-2 py-0.5 font-bold animate-in fade-in zoom-in">
+                    <TrendingUp className="w-3 h-3 mr-1" /> Viral
+                </Badge>
+            )}
+            <div className="bg-black/70 text-white text-[10px] font-bold px-2 py-1 rounded-md backdrop-blur-md border border-white/10">
+                {getRelativeTime(video.publishedAt)}
+            </div>
+        </div>
       </div>
 
-      <div className="p-4 flex flex-col gap-3">
-        <h3 className="font-extrabold text-[15px] leading-snug line-clamp-2 min-h-[40px]" title={video.title}>
+      {/* 2. CONTENIDO */}
+      <div className="p-4 flex flex-col flex-1 gap-3">
+        <h3 
+            className="font-bold text-[15px] leading-snug line-clamp-2 cursor-pointer hover:text-primary transition-colors"
+            onClick={() => onOpen(video)}
+            title={video.title}
+        >
           {video.title}
         </h3>
 
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-xs font-semibold text-muted-foreground truncate">{video.channel}</span>
-          <span className="text-[10px] font-extrabold bg-primary/10 text-primary px-2 py-1 rounded-full border border-primary/20 whitespace-nowrap">
-            {formatNumber(video.channelSubscribers)} Suscriptores
-          </span>
-        </div>
-
-        <div className="flex items-center justify-between text-sm">
-          <div className="space-y-0.5">
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Vistas</p>
-            <div className="flex items-center gap-2 font-bold">
-              <Eye size={16} className="text-muted-foreground" /> {formatNumber(video.views)}
+        {/* Canal (Solo Texto) */}
+        <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 overflow-hidden">
+                <span className="text-xs font-semibold text-muted-foreground truncate">
+                    {video.channel || video.channelTitle}
+                </span>
             </div>
-          </div>
-          <div className="text-right space-y-0.5">
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Publicado</p>
-            <span className="text-xs text-muted-foreground">{getRelativeTime(video.publishedAt)}</span>
-          </div>
+            <Badge variant="secondary" className="shrink-0 text-[10px] h-5 bg-secondary/50 text-secondary-foreground border-0">
+                {formatNumber(video.channelSubscribers)} Subs
+            </Badge>
         </div>
-
-        {tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {tags.map((tag) => (
-              <button
-                key={tag}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (onTagClick) {
-                    onTagClick(tag);
-                  }
-                }}
-                className="px-2 py-0.5 rounded-lg text-[10px] font-bold border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary/50 transition-colors"
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
-        )}
 
         <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-lg py-2 px-2 flex items-center justify-center gap-2 text-xs font-extrabold border border-border bg-surface">
-            <TrendingUp size={14} className="text-accent" /> {vphDisplay}/h
-          </div>
-          <div className="rounded-lg py-2 px-2 flex items-center justify-center gap-2 text-xs font-extrabold border border-border bg-surface">
-            <Gem size={14} className="text-primary" /> {video.growthRatio.toFixed(1)}x
-          </div>
+            <div className="bg-surface/50 rounded-lg p-2 border border-border/50 flex flex-col items-center justify-center text-center">
+                <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1"><TrendingUp className="w-3 h-3" /> VPH</span>
+                <span className="text-sm font-black text-foreground">{formatNumber(viewsPerHour)}</span>
+            </div>
+            <div className="bg-surface/50 rounded-lg p-2 border border-border/50 flex flex-col items-center justify-center text-center">
+                <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1"><Eye className="w-3 h-3" /> Total</span>
+                <span className="text-sm font-black text-foreground">{formatNumber(video.views)}</span>
+            </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-2">
-          <Button variant="glowOutline" className="w-full rounded-xl" onClick={() => onOpen(video)}>
-            <BarChart2 size={16} /> Ver señales
-          </Button>
-          {onToggleSave && (
-            <Button
-              variant={saved ? "soft" : "outline"}
-              className="w-full rounded-xl"
-              onClick={() => onToggleSave(video)}
+        <div className="mt-auto grid grid-cols-1 gap-2 pt-2">
+            <Button 
+                variant="outline" 
+                className="w-full rounded-xl h-9 text-xs font-bold border-primary/30 text-primary hover:bg-primary/5 hover:text-primary"
+                onClick={() => onOpen(video)}
             >
-              <Bookmark size={16} /> {saved ? "Guardado" : "Guardar"}
+                <BarChart2 className="w-3.5 h-3.5 mr-2" /> Ver señales
             </Button>
-          )}
+            
+            {onToggleSave && (
+                <Button 
+                    variant={saved ? "default" : "ghost"} 
+                    className={`w-full rounded-xl h-9 text-xs font-bold ${saved ? 'bg-primary hover:bg-primary/90' : 'bg-surface hover:bg-surface-2 border border-border'}`}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleSave(video);
+                    }}
+                >
+                    <Bookmark className={`w-3.5 h-3.5 mr-2 ${saved ? 'fill-current' : ''}`} />
+                    {saved ? "Guardado" : "Guardar"}
+                </Button>
+            )}
         </div>
       </div>
-    </article>
+    </Card>
   );
 }
-

@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Youtube, Bot, Zap, Monitor } from "lucide-react";
+import { Youtube, Sparkles, Zap, Monitor } from "lucide-react"; // Usamos Sparkles para Gemini
 import { useState, useEffect } from "react";
 
 interface ViralSettingsDialogProps {
@@ -20,22 +20,25 @@ export function ViralSettingsDialog({
   onToggleTheme
 }: ViralSettingsDialogProps) {
   const [youtubeKey, setYoutubeKey] = useState("");
-  const [openaiKey, setOpenaiKey] = useState("");
+  const [geminiKey, setGeminiKey] = useState("");
 
   // Cargar keys guardadas al abrir
   useEffect(() => {
     if (open) {
       setYoutubeKey(localStorage.getItem("youtube_api_key") || "");
-      setOpenaiKey(localStorage.getItem("openai_api_key") || "");
+      // Buscamos la key de Gemini (si existía la de openai, la ignoramos o migramos manualmente)
+      setGeminiKey(localStorage.getItem("gemini_api_key") || "");
     }
   }, [open]);
 
   const handleSave = () => {
+    // Guardar YouTube Key
     if (youtubeKey) localStorage.setItem("youtube_api_key", youtubeKey);
     else localStorage.removeItem("youtube_api_key");
 
-    if (openaiKey) localStorage.setItem("openai_api_key", openaiKey);
-    else localStorage.removeItem("openai_api_key");
+    // Guardar Gemini Key (Importante: nombre de variable 'gemini_api_key')
+    if (geminiKey) localStorage.setItem("gemini_api_key", geminiKey);
+    else localStorage.removeItem("gemini_api_key");
 
     onOpenChange(false);
   };
@@ -66,6 +69,8 @@ export function ViralSettingsDialog({
           {/* TAB 1: APIs */}
           <TabsContent value="apis" className="space-y-4 py-4 animate-in fade-in slide-in-from-bottom-2">
             <div className="space-y-4">
+              
+              {/* YouTube API */}
               <div className="space-y-2">
                 <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-muted-foreground">
                   <Youtube className="w-4 h-4" /> Motor de Búsqueda (YouTube)
@@ -80,19 +85,21 @@ export function ViralSettingsDialog({
                 <p className="text-[10px] text-muted-foreground">Necesaria para buscar videos reales y obtener métricas.</p>
               </div>
 
+              {/* Google Gemini API */}
               <div className="space-y-2">
-                <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-muted-foreground">
-                  <Bot className="w-4 h-4" /> Motor Generativo (OpenAI / IA)
+                <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-primary">
+                  <Sparkles className="w-4 h-4 text-yellow-400 fill-yellow-400" /> Motor Generativo (Google Gemini)
                 </Label>
                 <Input 
-                  placeholder="sk-proj-..." 
+                  placeholder="AIzaSy... (Tu clave de Google AI Studio)" 
                   className="rounded-xl bg-surface/50 border-border focus-visible:ring-primary/20 font-mono text-sm"
-                  value={openaiKey}
-                  onChange={(e) => setOpenaiKey(e.target.value)}
+                  value={geminiKey}
+                  onChange={(e) => setGeminiKey(e.target.value)}
                   type="password"
                 />
-                <p className="text-[10px] text-muted-foreground">Necesaria para generar guiones y análisis de tendencias con IA.</p>
+                <p className="text-[10px] text-muted-foreground">Gratis. Necesaria para crear los guiones con IA.</p>
               </div>
+
             </div>
           </TabsContent>
 

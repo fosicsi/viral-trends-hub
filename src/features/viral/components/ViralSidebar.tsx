@@ -1,98 +1,109 @@
-import * as React from "react";
+import { 
+  Home, 
+  Flame, 
+  Search, 
+  Settings, 
+  Moon, 
+  Sun,
+  Bookmark
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Bookmark, Grid3X3, Home, KeyRound, Search, Zap, Sun, Moon } from "lucide-react";
-import { useTheme } from "next-themes";
 
-export type ViralView = "home" | "videos" | "viral" | "saved" | "tools";
+export type ViralView = "home" | "viral" | "videos" | "saved" | "tools";
 
-type Props = {
+interface ViralSidebarProps {
   view: ViralView;
-  onChangeView: (v: ViralView) => void;
-  onOpenApiKey: () => void;
-};
-
-function SidebarItem({
-  active,
-  onClick,
-  children,
-  ariaLabel,
-}: {
-  active?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-  ariaLabel: string;
-}) {
-  return (
-    <button
-      aria-label={ariaLabel}
-      onClick={onClick}
-      className={cn(
-        "w-12 h-12 rounded-xl grid place-items-center transition-colors",
-        "text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground",
-        active && "bg-primary text-primary-foreground shadow-glow",
-      )}
-    >
-      {children}
-    </button>
-  );
+  onChangeView: (view: ViralView) => void;
+  onOpenSettings: () => void; // Cambiamos nombre: de ApiKey a Settings
+  isDark: boolean;
+  onToggleTheme: () => void;
 }
 
-export function ViralSidebar({ view, onChangeView, onOpenApiKey }: Props) {
-  return (
-    <aside className="w-20 bg-sidebar border-r border-sidebar-border flex flex-col items-center py-6 z-20 shrink-0">
-      <button
-        onClick={() => onChangeView("home")}
+export function ViralSidebar({ 
+  view, 
+  onChangeView, 
+  onOpenSettings,
+  isDark,
+  onToggleTheme
+}: ViralSidebarProps) {
+  
+  const NavItem = ({ 
+    id, 
+    icon: Icon, 
+    label 
+  }: { 
+    id: ViralView; 
+    icon: any; 
+    label: string 
+  }) => (
+    <button
+      onClick={() => onChangeView(id)}
+      className={cn(
+        "group flex w-full flex-col items-center justify-center gap-1 rounded-2xl p-3 transition-all duration-300",
+        view === id 
+          ? "bg-primary/10 text-primary shadow-glow-sm" 
+          : "text-muted-foreground hover:bg-surface hover:text-foreground"
+      )}
+    >
+      <Icon 
         className={cn(
-          "mb-8 p-3 rounded-xl shadow-glow",
-          "bg-gradient-to-br from-primary via-primary to-brand-2",
-        )}
-        aria-label="Ir a inicio"
-      >
-        <Zap className="text-primary-foreground" size={20} />
-      </button>
+          "h-6 w-6 transition-transform duration-300 group-hover:scale-110", 
+          view === id && "fill-current"
+        )} 
+        strokeWidth={2}
+      />
+      <span className="text-[10px] font-bold tracking-wide">{label}</span>
+    </button>
+  );
 
-      <div className="flex-1 w-full flex flex-col items-center px-2 gap-3">
-        <SidebarItem ariaLabel="Inicio" active={view === "home"} onClick={() => onChangeView("home")}>
-          <Home size={22} />
-        </SidebarItem>
-        <SidebarItem ariaLabel="Buscar" active={view === "videos"} onClick={() => onChangeView("videos")}>
-          <Search size={22} />
-        </SidebarItem>
-        <SidebarItem ariaLabel="Viral" active={view === "viral"} onClick={() => onChangeView("viral")}>
-          <Zap size={22} />
-        </SidebarItem>
-        <SidebarItem ariaLabel="Guardados" active={view === "saved"} onClick={() => onChangeView("saved")}>
-          <Bookmark size={22} />
-        </SidebarItem>
-        <SidebarItem ariaLabel="Herramientas" active={view === "tools"} onClick={() => onChangeView("tools")}>
-          <Grid3X3 size={22} />
-        </SidebarItem>
+  return (
+    <aside className="hidden h-screen w-[90px] flex-col items-center justify-between border-r border-border/50 bg-background/95 py-6 backdrop-blur-xl transition-all sm:flex z-50">
+      {/* Top: Logo simplificado o Home */}
+      <div className="flex flex-col gap-6">
+        <button 
+            onClick={() => onChangeView("home")}
+            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-purple-600 shadow-glow transition-transform hover:scale-105"
+        >
+            <Flame className="h-6 w-6 text-white fill-white" />
+        </button>
+
+        <nav className="flex flex-col gap-3 mt-4">
+          <NavItem id="home" icon={Home} label="Inicio" />
+          <NavItem id="viral" icon={Flame} label="Viral" />
+          <NavItem id="videos" icon={Search} label="Buscar" />
+          <NavItem id="saved" icon={Bookmark} label="Saved" />
+        </nav>
       </div>
 
-      <div className="mt-auto w-full flex flex-col items-center px-2 gap-3">
-        <ThemeToggle />
-        <SidebarItem ariaLabel="Configurar API" onClick={onOpenApiKey}>
-          <KeyRound size={22} />
-        </SidebarItem>
+      {/* Bottom: Settings & Theme */}
+      <div className="flex flex-col gap-4 items-center mb-2">
+        
+        {/* Interruptor de Tema */}
+        <button
+          onClick={onToggleTheme}
+          className="group flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-all hover:bg-surface hover:text-yellow-400"
+          title={isDark ? "Cambiar a modo día" : "Cambiar a modo noche"}
+        >
+          {isDark ? (
+            // Estamos en Dark, mostramos SOL para ir a Light
+            <Sun className="h-6 w-6 transition-transform group-hover:rotate-90 group-hover:scale-110" />
+          ) : (
+            // Estamos en Light, mostramos LUNA para ir a Dark
+            <Moon className="h-6 w-6 transition-transform group-hover:-rotate-12 group-hover:scale-110" />
+          )}
+        </button>
+
+        <div className="h-px w-8 bg-border/50" />
+
+        {/* Botón de Ajustes (Rueda Dentada) */}
+        <button
+          onClick={onOpenSettings}
+          className="group flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-all hover:bg-surface hover:text-primary"
+          title="Configuración y API Keys"
+        >
+          <Settings className="h-6 w-6 transition-transform duration-500 group-hover:rotate-180" />
+        </button>
       </div>
     </aside>
-  );
-}
-
-function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
-  const isDark = theme === "dark";
-
-  return (
-    <button
-      aria-label={isDark ? "Cambiar a modo día" : "Cambiar a modo noche"}
-      onClick={() => setTheme(isDark ? "light" : "dark")}
-      className={cn(
-        "w-12 h-12 rounded-xl grid place-items-center transition-colors",
-        "text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground",
-      )}
-    >
-      {isDark ? <Sun size={22} /> : <Moon size={22} />}
-    </button>
   );
 }

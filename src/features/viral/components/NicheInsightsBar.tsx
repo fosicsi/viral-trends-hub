@@ -1,8 +1,7 @@
 import * as React from "react";
-import { Sparkles, TrendingUp, Users, Trophy, AlertCircle } from "lucide-react";
+import { Sparkles, TrendingUp, Users, Trophy } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { formatNumber } from "@/lib/format";
 import type { VideoItem } from "../types";
 
 // --- HELPERS ---
@@ -38,9 +37,6 @@ function extractTopKeywords(titles: string[], limit: number): string[] {
 }
 
 function getNicheVerdict(avgRatio: number, uniqueSmallCreators: number) {
-  // Ajustamos la lógica: Si hay AL MENOS 1 canal pequeño rompiéndola, ya es buena señal.
-  // Si hay muchos (más de 3 únicos), es un nicho de oro.
-  
   if (uniqueSmallCreators >= 3 && avgRatio > 2) {
     return { 
       label: "🔥 NICHO DE ORO", 
@@ -75,17 +71,23 @@ function computeInsights(items: VideoItem[]) {
   const totalViews = items.reduce((acc, v) => acc + (Number.isFinite(v.views) ? v.views : 0), 0);
   const avgViews = totalViews / items.length;
   
-  // --- CORRECCIÓN DE CÓMPUTO DE CANALES ---
-  // 1. Filtramos los videos de canales pequeños (< 10k)
+  // --- CORRECCIÓN DEFINITIVA DE CONTEO (POR ID) ---
+  // 1. Filtramos canales pequeños (< 10k subs)
   const smallChannelVideos = items.filter((v) => (v.channelSubscribers ?? 0) < 10_000);
   
-  // 2. Extraemos los nombres (o IDs) únicos para no contar el mismo canal 10 veces
-  const uniqueSmallChannels = new Set(
-    smallChannelVideos.map(v => v.channel || v.channelTitle || "Unknown")
-  );
+  // 2. Usamos un Set con el CHANNEL ID para garantizar unicidad real
+  const uniqueSmallChannels = new Set();
+  
+  smallChannelVideos.forEach(v => {
+      // Prioridad: ID > ChannelTitle > Channel Name
+      const identifier = v.channelId || v.channelTitle || v.channel;
+      if (identifier) {
+          uniqueSmallChannels.add(identifier);
+      }
+  });
   
   const smallCreatorsCount = uniqueSmallChannels.size;
-  // ----------------------------------------
+  // ------------------------------------------------
   
   const totalRatio = items.reduce((acc, v) => acc + (v.growthRatio || 0), 0);
   const avgRatio = totalRatio / items.length;

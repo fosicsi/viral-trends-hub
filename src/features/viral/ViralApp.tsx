@@ -12,7 +12,7 @@ import { ViralSortControl, type SortOption } from "./components/ViralSortControl
 import type { ViralFilters, VideoItem } from "./types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Flame, TrendingUp, AlertCircle, Award, CheckCircle2, Wand2, Copy, ArrowLeft, Image as ImageIcon, Video, Music, Hash, Tag, FileText, Layers, Compass, Zap, BarChart3, ArrowRight, Check, Star, MousePointer2, PlayCircle, Eye, User, ExternalLink, Filter, X, RefreshCcw } from "lucide-react";
+import { Search, Flame, TrendingUp, AlertCircle, Award, CheckCircle2, Wand2, Copy, ArrowLeft, Image as ImageIcon, Video, Music, Hash, Tag, FileText, Layers, Compass, Zap, BarChart3, ArrowRight, Check, Star, MousePointer2, PlayCircle, Eye, User, ExternalLink, Filter, X, RefreshCcw, Smartphone, Instagram, Youtube } from "lucide-react";
 import { youtubeSearch } from "@/lib/api/youtube";
 import { aiViralTopic } from "@/lib/api/ai-viral-topics";
 import { generateViralScript, type ViralPackage } from "@/lib/api/generate-script"; 
@@ -42,13 +42,49 @@ export default function ViralApp() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [aiLoading, setAiLoading] = React.useState(false);
+  const [hasSearched, setHasSearched] = React.useState(false);
 
   const [scriptLoading, setScriptLoading] = React.useState(false);
   const [viralPackage, setViralPackage] = React.useState<ViralPackage | null>(null);
 
-  // Nuevo estado para controlar si ya se buscó
-  const [hasSearched, setHasSearched] = React.useState(false);
+  // --- TYPEWRITER STATE ---
+  const [typewriterText, setTypewriterText] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [loopNum, setLoopNum] = useState(0);
+  const [typingSpeed, setTypingSpeed] = useState(100);
 
+  const typewriterWords = useMemo(() => [
+    "Recetas para Shorts...", 
+    "Trucos de Excel para TikTok...", 
+    "Estoicismo para Reels...", 
+    "Fitness para YouTube...",
+    "Curiosidades para TikTok...",
+    "Finanzas para Reels..."
+  ], []);
+
+  useEffect(() => {
+    const handleType = () => {
+      const i = loopNum % typewriterWords.length;
+      const fullText = typewriterWords[i];
+
+      setTypewriterText(isDeleting ? fullText.substring(0, typewriterText.length - 1) : fullText.substring(0, typewriterText.length + 1));
+
+      if (!isDeleting && typewriterText === fullText) {
+        setTimeout(() => setIsDeleting(true), 2000); 
+        setTypingSpeed(50);
+      } else if (isDeleting && typewriterText === "") {
+        setIsDeleting(false);
+        setLoopNum(loopNum + 1);
+        setTypingSpeed(100);
+      }
+    };
+
+    const timer = setTimeout(handleType, typingSpeed);
+    return () => clearTimeout(timer);
+  }, [typewriterText, isDeleting, loopNum, typingSpeed, typewriterWords]);
+
+
+  // --- LÓGICA DE TEMA ---
   const [isDark, setIsDark] = React.useState(false); 
   const toggleTheme = () => {
     const nextState = !isDark;
@@ -59,35 +95,40 @@ export default function ViralApp() {
       else document.documentElement.classList.remove("dark");
   }, [isDark]);
 
+  // --- PARTICLES (ESTABILIZADO: INTERACTIVIDAD OFF) ---
   const [init, setInit] = useState(false);
   useEffect(() => {
-    initParticlesEngine(async (engine) => {
-      await loadSlim(engine);
-    }).then(() => {
-      setInit(true);
-    });
+    initParticlesEngine(async (engine) => { await loadSlim(engine); }).then(() => { setInit(true); });
   }, []);
 
   const particlesOptions = useMemo(() => ({
     fullScreen: false,
     background: { color: { value: "transparent" }, },
-    fpsLimit: 120,
-    interactivity: {
-      events: { onHover: { enable: true, mode: "grab" }, },
-      modes: { grab: { distance: 140, links: { opacity: 0.5 } }, },
+    fpsLimit: 60, // Limitado a 60 para estabilidad
+    // INTERACTIVIDAD DESACTIVADA PARA EVITAR EL "JITTER" AL HACER HOVER
+    interactivity: { 
+        events: { onHover: { enable: false }, onClick: { enable: false } }, 
     },
     particles: {
       color: { value: isDark ? "#ffffff" : "#000000" },
-      links: { color: isDark ? "#ffffff" : "#000000", distance: 150, enable: true, opacity: 0.2, width: 1, },
-      move: { direction: "none", enable: true, outModes: { default: "bounce" }, random: false, speed: 1, straight: false, },
-      number: { density: { enable: true, area: 800 }, value: 60 },
+      links: { color: isDark ? "#ffffff" : "#000000", distance: 150, enable: true, opacity: 0.15, width: 1, },
+      move: { 
+          direction: "none", 
+          enable: true, 
+          outModes: { default: "bounce" }, 
+          random: true, 
+          speed: 0.5, // Movimiento más lento y elegante
+          straight: false, 
+      },
+      number: { density: { enable: true, area: 800 }, value: 50 }, // Menos partículas = más rendimiento
       opacity: { value: 0.3 },
       shape: { type: "circle" },
-      size: { value: { min: 1, max: 3 } },
+      size: { value: { min: 1, max: 2 } },
     },
     detectRetina: true,
   }), [isDark]);
 
+  // Estados del Explorador
   const [viralTopic, setViralTopic] = React.useState<string>(VIRAL_TOPICS[0]);
   const [viralInput, setViralInput] = React.useState<string>(""); 
   const [viralResults, setViralResults] = React.useState<VideoItem[]>([]);
@@ -107,7 +148,6 @@ export default function ViralApp() {
     setScriptLoading(false);
   }, [selected]);
 
-  // --- FUNCIÓN DE RESET (LIMPIAR BÚSQUEDA) ---
   const handleResetSearch = () => {
     setHasSearched(false);
     setViralInput("");
@@ -115,8 +155,6 @@ export default function ViralApp() {
     setViralResults([]);
     setLiveResults([]);
     setAiCriteria(null);
-    // Opcional: Volver a Home si se prefiere
-    // setView("home");
   };
 
   const handleGenerateScript = async () => {
@@ -154,7 +192,6 @@ export default function ViralApp() {
     const publishedMs = Date.parse(v.publishedAt);
     const ageHours = Number.isFinite(publishedMs) ? Math.max(1, (now - publishedMs) / (1000 * 60 * 60)) : 72;
     const viewsPerHour = Math.max(1, Math.round(v.views / ageHours));
-    
     let score = 0;
     if (v.growthRatio > 1) score += 20;
     if (v.growthRatio > 5) score += 20;
@@ -163,12 +200,10 @@ export default function ViralApp() {
     if (viewsPerHour > 1000) score += 10;
     if (v.channelSubscribers < 50000) score += 20;
     score = Math.min(100, score);
-
     let verdict = "Video Standard";
     let verdictColor = "text-muted-foreground";
     let verdictBg = "bg-surface";
     let badges = [];
-
     if (score >= 80) {
       verdict = "💎 NICHO DE ORO";
       verdictColor = "text-yellow-400";
@@ -182,10 +217,8 @@ export default function ViralApp() {
     } else {
       badges.push({ icon: <CheckCircle2 className="w-3 h-3" />, text: "Estable", color: "text-slate-400 bg-slate-400/10" });
     }
-
     if (viewsPerHour > 500) badges.push({ icon: <Flame className="w-3 h-3" />, text: "Muy Viral", color: "text-orange-500 bg-orange-500/10" });
     if (v.growthRatio > 10) badges.push({ icon: <AlertCircle className="w-3 h-3" />, text: "Outlier", color: "text-red-400 bg-red-400/10" });
-
     return { ageLabel: getRelativeTime(v.publishedAt), viewsPerHour, score, verdict, verdictColor, verdictBg, badges, ratio: v.growthRatio };
   }, []);
 
@@ -207,9 +240,7 @@ export default function ViralApp() {
     const targetSetResults = isViral ? setViralResults : setLiveResults;
     const targetSetError = isViral ? setViralError : setError;
     const targetSetLoading = isViral ? setViralLoading : setLoading;
-    
-    setHasSearched(true); // Se intentó buscar
-
+    setHasSearched(true); 
     if (!q.trim()) return;
     targetSetLoading(true);
     targetSetError(null);
@@ -222,18 +253,15 @@ export default function ViralApp() {
   const handleAiViral = async () => {
     const apiKey = localStorage.getItem("gemini_api_key");
     const preset: ViralFilters = { minViews: 5000, maxSubs: 1000_000, date: "year", type: "video", order: "relevance" };
-
     setAiLoading(true); 
     setAiCriteria(null);
     try {
       const res = await aiViralTopic(apiKey || undefined);
       if (!res.success) { setViralError(res.error || "Error IA"); return; }
-      
       setViralFilters(preset); 
       setViralTopic(res.topic); 
       setViralInput(res.query); 
       setAiCriteria(res.criteria); 
-      
       setView("viral"); 
       await handleSearchGeneric(res.query, preset, true);
     } catch (e) { setViralError("Error conectando con IA"); } finally { setAiLoading(false); }
@@ -248,53 +276,33 @@ export default function ViralApp() {
     if (view === "viral" && viralResults.length === 0 && !viralLoading) { runViralSearch(viralTopic); } 
   }, [view]);
 
-  // --- MOCKUP COMPONENTS ---
+  // --- COMPONENTES AUXILIARES ---
+  
+  // MOCKUP BROWSER: Eliminado hover:scale para evitar saltos
   const MockupBrowserWindow = ({ children, title }: { children: React.ReactNode, title: string }) => (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-2xl overflow-hidden transform transition-transform hover:scale-[1.01]">
+    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-2xl overflow-hidden">
         <div className="h-8 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center px-4 gap-2">
             <div className="w-3 h-3 rounded-full bg-red-400/80"></div>
             <div className="w-3 h-3 rounded-full bg-yellow-400/80"></div>
             <div className="w-3 h-3 rounded-full bg-green-400/80"></div>
             <div className="ml-4 text-[10px] text-slate-400 font-mono flex-1 text-center">{title}</div>
         </div>
-        <div className="p-4 md:p-6 bg-slate-50/50 dark:bg-black/50 relative">
-            {children}
-        </div>
+        <div className="p-4 md:p-6 bg-slate-50/50 dark:bg-black/50 relative">{children}</div>
     </div>
   );
 
-  // --- EMPTY STATE MODERNO CON BOTÓN DE SALIDA ---
   const EmptyState = ({ onRetry }: { onRetry?: () => void }) => (
-    <motion.div 
-      initial={{ opacity: 0, scale: 0.95 }} 
-      animate={{ opacity: 1, scale: 1 }} 
-      className="col-span-full flex justify-center py-10 relative z-20"
-    >
+    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="col-span-full flex justify-center py-10 relative z-20">
       <div className="bg-background/80 backdrop-blur-xl border border-border rounded-3xl p-8 text-center max-w-md shadow-2xl relative">
-        {/* BOTÓN X PARA SALIR (RESET) */}
-        <button 
-            onClick={handleResetSearch}
-            className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-muted-foreground"
-        >
-            <X className="w-5 h-5" />
-        </button>
-
+        <button onClick={handleResetSearch} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-muted-foreground"><X className="w-5 h-5" /></button>
         <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 animate-in zoom-in duration-300">
           <Search className="w-8 h-8 text-muted-foreground" />
         </div>
         <h3 className="text-xl font-bold mb-2">No encontramos resultados</h3>
-        <p className="text-muted-foreground mb-6 text-sm">
-          Prueba afinando tus filtros o usando palabras clave más generales.
-        </p>
+        <p className="text-muted-foreground mb-6 text-sm">Prueba afinando tus filtros o usando palabras clave más generales.</p>
         <div className="flex gap-3 justify-center">
-          <Button variant="ghost" onClick={handleResetSearch} className="rounded-xl">
-             <RefreshCcw className="w-4 h-4 mr-2" /> Limpiar búsqueda
-          </Button>
-          {onRetry && (
-             <Button variant="outline" onClick={onRetry} className="rounded-xl border-primary/50 text-primary hover:bg-primary/10">
-                <Filter className="w-4 h-4 mr-2" /> Ajustar Filtros
-             </Button>
-          )}
+          <Button variant="ghost" onClick={handleResetSearch} className="rounded-xl"><RefreshCcw className="w-4 h-4 mr-2" /> Limpiar búsqueda</Button>
+          {onRetry && (<Button variant="outline" onClick={onRetry} className="rounded-xl border-primary/50 text-primary hover:bg-primary/10"><Filter className="w-4 h-4 mr-2" /> Ajustar Filtros</Button>)}
         </div>
       </div>
     </motion.div>
@@ -302,45 +310,36 @@ export default function ViralApp() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground transition-colors duration-300 font-sans">
-      
       <ViralSidebar view={view} onChangeView={setView} onOpenSettings={() => setShowSettings(true)} isDark={isDark} onToggleTheme={toggleTheme} />
       
       <div className="flex-1 min-w-0 flex flex-col relative overflow-hidden">
-        
         {view !== "home" && <ViralTopbar view={view} />}
 
         <main className="flex-1 overflow-y-auto relative scroll-smooth">
           
-          {/* HOME VIEW (LANDING) */}
           {view === "home" && (
             <div className="flex flex-col min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-white transition-colors duration-500">
               
+              {/* NAVBAR */}
               <header className="sticky top-0 z-50 w-full border-b border-slate-200/50 dark:border-slate-800/50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl">
                 <div className="container mx-auto px-6 h-16 flex items-center justify-between">
                   <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 font-black text-xl tracking-tighter">
                     <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white shadow-lg shadow-primary/20"><Zap className="w-5 h-5 fill-current" /></div>
                     ViralTrends<span className="text-primary">.ai</span>
                   </motion.div>
-                  
                   <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600 dark:text-slate-400">
                     {["Funcionalidades", "Precios", "Consultoría", "Casos de Éxito"].map((item, i) => (
-                        <motion.a key={item} href="#" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="hover:text-primary transition-colors relative group">
-                            {item}
-                            <span className="absolute left-0 -bottom-1 w-0 h-0.5 bg-primary transition-all group-hover:w-full"></span>
-                        </motion.a>
+                        <motion.a key={item} href="#" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="hover:text-primary transition-colors relative group">{item}<span className="absolute left-0 -bottom-1 w-0 h-0.5 bg-primary transition-all group-hover:w-full"></span></motion.a>
                     ))}
                   </nav>
-
                   <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-4">
                     <Button variant="ghost" className="hidden sm:flex hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => setShowSettings(true)}>Log in</Button>
-                    <Button className="rounded-full px-6 font-bold shadow-lg shadow-primary/30 hover:shadow-primary/50 transition-all hover:scale-105" onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}>
-                      Comprar <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
+                    <Button className="rounded-full px-6 font-bold shadow-lg shadow-primary/30 hover:shadow-primary/50 transition-all hover:scale-105" onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}>Comprar <ArrowRight className="w-4 h-4 ml-2" /></Button>
                   </motion.div>
                 </div>
               </header>
 
-              {/* HERO */}
+              {/* HERO SECTION DE VENTAS CON TYPEWRITER */}
               <section className="relative pt-28 pb-40 px-6 overflow-hidden">
                 {init && ( <div className="absolute inset-0 pointer-events-none z-0"> <Particles id="tsparticles" options={particlesOptions as any} className="h-full w-full" /> </div> )}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/15 blur-[120px] rounded-full pointer-events-none z-0 mix-blend-multiply dark:mix-blend-soft-light" />
@@ -357,10 +356,40 @@ export default function ViralApp() {
                   </motion.h1>
                   
                   <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="text-xl md:text-2xl text-slate-600 dark:text-slate-300 max-w-3xl mx-auto leading-relaxed font-medium">
-                    Deja de perder horas grabando videos que nadie ve. Nuestra IA detecta nichos rentables antes de que sean tendencia y te dice exactamente cómo editarlos.
+                    Deja de perder horas grabando. Nuestra IA detecta nichos rentables en <strong>YouTube</strong> que funcionan perfectamente para <strong>TikTok</strong> y <strong>Reels</strong>.
                   </motion.p>
 
-                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }} className="flex flex-col sm:flex-row gap-5 justify-center pt-8">
+                  {/* BARRA DE BÚSQUEDA SIMULADA (TYPEWRITER) */}
+                  <motion.div 
+                    initial={{ opacity: 0, width: 0 }} 
+                    animate={{ opacity: 1, width: "100%" }} 
+                    transition={{ delay: 0.4, duration: 0.8 }}
+                    className="max-w-xl mx-auto bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-2 flex items-center shadow-2xl relative overflow-hidden"
+                  >
+                      <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center shrink-0">
+                          <Search className="w-5 h-5 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 px-4 text-left font-mono text-slate-500 dark:text-slate-400 text-lg">
+                          {typewriterText}
+                          <span className="animate-pulse">|</span>
+                      </div>
+                      <div className="absolute right-2 top-2 bottom-2 bg-gradient-to-l from-white dark:from-slate-900 to-transparent w-16 pointer-events-none"></div>
+                  </motion.div>
+
+                  {/* BADGES MULTI-PLATAFORMA */}
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} className="flex flex-wrap justify-center gap-4 opacity-80 pt-4">
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-400">
+                          <Youtube className="w-4 h-4 text-red-500 fill-current" /> YouTube Shorts
+                      </div>
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-400">
+                          <Instagram className="w-4 h-4 text-pink-500" /> Instagram Reels
+                      </div>
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-400">
+                          <span className="w-4 h-4 bg-black dark:bg-white text-white dark:text-black rounded-sm flex items-center justify-center text-[10px] font-black">T</span> TikTok
+                      </div>
+                  </motion.div>
+
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.7 }} className="flex flex-col sm:flex-row gap-5 justify-center pt-8">
                     <Button size="xl" className="h-16 rounded-2xl px-12 text-xl font-bold shadow-2xl shadow-primary/40 hover:shadow-primary/60 hover:scale-105 transition-all relative overflow-hidden group" onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}>
                       <div className="absolute inset-0 bg-white/20 group-hover:translate-x-full transition-transform duration-500 skew-x-12 -z-10"></div>
                       Obtener Acceso de Por Vida
@@ -374,36 +403,211 @@ export default function ViralApp() {
                      <button onClick={() => setView("videos")} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors underline decoration-dotted opacity-50 hover:opacity-100">Ir al Buscador (Admin)</button>
                   </div>
 
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} className="pt-10 flex items-center justify-center gap-6 text-sm text-slate-500 dark:text-slate-400 font-medium">
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="pt-10 flex items-center justify-center gap-6 text-sm text-slate-500 dark:text-slate-400 font-medium">
                     <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-500" /> Sin mensualidades</span>
                     <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-500" /> Garantía de 30 días</span>
                   </motion.div>
                 </div>
               </section>
 
-              {/* SECTIONS PLACEHOLDERS (Igual que antes) */}
+              {/* SECCIÓN: MAQUETAS VISUALES / "CÓMO FUNCIONA" */}
               <section id="how-it-works" className="py-24 px-6 bg-slate-50 dark:bg-slate-900/30 border-y border-slate-200 dark:border-slate-800">
                 <div className="container mx-auto max-w-7xl">
                     <div className="text-center mb-20 space-y-4">
                         <h2 className="text-4xl md:text-5xl font-black tracking-tight">Así funciona tu nueva arma secreta.</h2>
                         <p className="text-xl text-slate-600 dark:text-slate-400">De la idea a la ejecución en segundos, no días.</p>
                     </div>
-                    {/* ... (Maquetas Visuales omitidas para brevedad, son idénticas a la versión anterior) ... */}
-                    <div className="flex justify-center"><p className="text-muted-foreground">[Maquetas Visuales Cargadas]</p></div>
+
+                    {/* ESCENA 1: EL RADAR (BÚSQUEDA) */}
+                    <div className="grid md:grid-cols-2 gap-16 items-center mb-32">
+                        <motion.div initial={{ opacity: 0, x: -50 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="space-y-6">
+                            <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-3xl flex items-center justify-center text-blue-600 dark:text-blue-400 mb-4">
+                                <Compass className="w-8 h-8" />
+                            </div>
+                            <h3 className="text-3xl font-bold">1. El Radar de Oportunidades</h3>
+                            <p className="text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Escribe cualquier tema. En segundos, nuestro algoritmo escanea YouTube y te muestra qué videos están teniendo un crecimiento explosivo (Outliers) en canales pequeños.
+                            </p>
+                            <ul className="space-y-3">
+                                <li className="flex items-center gap-3 font-medium"><Check className="w-5 h-5 text-green-500" /> Filtra por Vistas por Hora (VPH)</li>
+                                <li className="flex items-center gap-3 font-medium"><Check className="w-5 h-5 text-green-500" /> Detecta "Gemas Ocultas" (Canales &lt; 50k subs)</li>
+                            </ul>
+                        </motion.div>
+                        
+                        <motion.div initial={{ opacity: 0, x: 50 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="relative group cursor-default">
+                            <div className="absolute -inset-4 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-2xl opacity-20 blur-xl group-hover:opacity-30 transition-opacity"></div>
+                            <motion.div initial={{ y: 20, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }} className="absolute -right-4 top-10 z-20 bg-white text-slate-900 text-xs font-bold px-3 py-2 rounded-lg shadow-xl flex items-center gap-2 border border-slate-100">
+                                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Oportunidad Detectada
+                            </motion.div>
+                            <MockupBrowserWindow title="ViralTrends - Explorer">
+                                <div className="space-y-4">
+                                    <div className="flex gap-2">
+                                        <div className="h-10 flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg flex items-center px-3 text-xs text-slate-400">Recetas Airfryer...</div>
+                                        <div className="h-10 w-24 bg-primary rounded-lg flex items-center justify-center text-white text-xs font-bold">Buscar</div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {[1, 2].map((i) => (
+                                            <div key={i} className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden group/card hover:border-primary/50 transition-colors">
+                                                <div className="aspect-video bg-slate-200 dark:bg-slate-700 rounded-lg mb-2 flex items-center justify-center text-slate-300"><ImageIcon className="w-6 h-6" /></div>
+                                                <div className="h-2 w-3/4 bg-slate-200 dark:bg-slate-700 rounded mb-1"></div>
+                                                <div className="h-2 w-1/2 bg-slate-200 dark:bg-slate-700 rounded"></div>
+                                                {i === 1 && (<div className="absolute top-2 right-2 bg-yellow-400 text-black text-[10px] font-bold px-2 py-0.5 rounded shadow flex items-center gap-1"><Flame className="w-3 h-3" /> 1.5k VPH</div>)}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </MockupBrowserWindow>
+                        </motion.div>
+                    </div>
+
+                    {/* ESCENA 2: EL CEREBRO (IA) */}
+                    <div className="grid md:grid-cols-2 gap-16 items-center">
+                         <motion.div initial={{ opacity: 0, x: -50 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="relative order-2 md:order-1 group cursor-default">
+                            <div className="absolute -inset-4 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl opacity-20 blur-xl group-hover:opacity-30 transition-opacity"></div>
+                            <motion.div initial={{ y: -20, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }} className="absolute -left-4 top-4 z-20 bg-slate-900 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-xl flex items-center gap-2 border border-slate-700">
+                                <Wand2 className="w-3 h-3 text-purple-400" /> Analizando Video...
+                            </motion.div>
+                            <MockupBrowserWindow title="ViralTrends - AI Studio">
+                                <div className="flex gap-4 h-64">
+                                    <div className="w-1/3 bg-black rounded-lg relative overflow-hidden flex items-center justify-center group/video">
+                                        <div className="w-10 h-10 rounded-full border-2 border-white/50 flex items-center justify-center group-hover/video:scale-110 transition-transform"><PlayCircle className="text-white w-6 h-6" /></div>
+                                    </div>
+                                    <div className="flex-1 space-y-3">
+                                        <div className="flex gap-2 mb-4">
+                                            <div className="px-3 py-1 bg-primary/10 text-primary text-[10px] font-bold rounded-md border border-primary/20">Estrategia: Reacción</div>
+                                            <div className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-[10px] font-bold rounded-md text-slate-500">Guion</div>
+                                        </div>
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-100 dark:border-slate-800 relative">
+                                            <div className="absolute bottom-2 right-2"><MousePointer2 className="w-4 h-4 text-slate-400 fill-slate-400" /></div>
+                                            <div className="h-2 w-16 bg-green-400/50 rounded mb-2"></div>
+                                            <div className="space-y-1">
+                                                <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-700 rounded"></div>
+                                                <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-700 rounded"></div>
+                                                <div className="h-1.5 w-2/3 bg-slate-200 dark:bg-slate-700 rounded"></div>
+                                            </div>
+                                        </div>
+                                        <div className="p-3 bg-purple-50 dark:bg-purple-900/10 rounded-lg border border-purple-100 dark:border-purple-900/30">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                                                <div className="text-[10px] font-bold text-purple-600 dark:text-purple-400">Prompt Midjourney</div>
+                                            </div>
+                                            <div className="h-1.5 w-full bg-purple-200 dark:bg-purple-800/50 rounded"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </MockupBrowserWindow>
+                        </motion.div>
+
+                        <motion.div initial={{ opacity: 0, x: 50 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="space-y-6 order-1 md:order-2">
+                            <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/30 rounded-3xl flex items-center justify-center text-purple-600 dark:text-purple-400 mb-4">
+                                <Zap className="w-8 h-8" />
+                            </div>
+                            <h3 className="text-3xl font-bold">2. Tu Productor Ejecutivo IA</h3>
+                            <p className="text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Una vez encuentras el video ganador, nuestra IA lo analiza y te entrega el <strong>"Kit de Producción"</strong> completo.
+                            </p>
+                            <ul className="space-y-3">
+                                <li className="flex items-center gap-3 font-medium"><Check className="w-5 h-5 text-purple-500" /> Estrategia de Formato (¿Split screen? ¿Voz en off?)</li>
+                                <li className="flex items-center gap-3 font-medium"><Check className="w-5 h-5 text-purple-500" /> Guion optimizado palabra por palabra</li>
+                                <li className="flex items-center gap-3 font-medium"><Check className="w-5 h-5 text-purple-500" /> Prompts listos para generar miniaturas y B-roll</li>
+                            </ul>
+                        </motion.div>
+                    </div>
                 </div>
               </section>
-              
-              <section id="pricing" className="py-32 px-6 bg-white dark:bg-slate-950 relative z-10">
-                 <div className="container mx-auto max-w-6xl text-center">
-                    <h2 className="text-3xl font-black mb-10">Precios Simples</h2>
-                    <div className="flex justify-center"><Button size="lg" onClick={() => setView("viral")}>Ir a la Demo</Button></div>
-                 </div>
+
+              {/* SUCCESS STORY */}
+              <section className="py-32 bg-slate-950 dark:bg-black text-white relative overflow-hidden">
+                <div className="absolute inset-0 bg-grid-white/[0.03] bg-[length:40px_40px] pointer-events-none" />
+                <div className="container mx-auto px-6 relative z-10">
+                  <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} className="max-w-5xl mx-auto bg-white/5 backdrop-blur-xl border border-white/10 rounded-[40px] p-16 relative shadow-2xl">
+                    <div className="absolute -top-8 -left-8 w-24 h-24 bg-primary rounded-3xl flex items-center justify-center text-5xl font-black shadow-lg shadow-primary/30">"</div>
+                    <div className="flex flex-col md:flex-row gap-16 items-center">
+                      <div className="flex-1 space-y-8">
+                         <h3 className="text-4xl md:text-5xl font-bold leading-tight">"Pasé de 200 vistas estancadas a <span className="text-primary">150k+ en mi primer mes</span>."</h3>
+                         <p className="text-slate-300 text-xl leading-relaxed">"Antes subía videos al azar basado en mi intuición y rezaba al algoritmo. Ahora uso el validador para asegurar que cada idea tenga demanda real antes de siquiera abrir el editor. El ROI es simplemente brutal."</p>
+                         <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center text-2xl">👨‍💻</div>
+                            <div>
+                                <p className="font-bold text-lg">Martín G.</p>
+                                <p className="text-sm text-primary/80 font-medium">Creador de Contenido Tech</p>
+                            </div>
+                         </div>
+                      </div>
+                      
+                      <div className="w-full md:w-80 bg-black/50 rounded-3xl p-8 border border-white/10 shadow-inner relative overflow-hidden">
+                        <div className="flex justify-between items-end h-48 gap-4 relative z-10">
+                           <motion.div initial={{ height: 0 }} whileInView={{ height: "20%" }} viewport={{ once: true }} transition={{ duration: 1 }} className="w-full bg-slate-700/50 rounded-t-md"></motion.div>
+                           <motion.div initial={{ height: 0 }} whileInView={{ height: "30%" }} viewport={{ once: true }} transition={{ duration: 1 }} className="w-full bg-slate-700/50 rounded-t-md"></motion.div>
+                           <motion.div initial={{ height: 0 }} whileInView={{ height: "95%" }} viewport={{ once: true }} transition={{ type: "spring", damping: 15 }} className="w-full bg-gradient-to-t from-primary to-purple-500 rounded-t-md relative">
+                              <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-black text-[10px] font-bold px-2 py-0.5 rounded shadow">+450%</div>
+                           </motion.div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                </div>
               </section>
+
+              {/* PRICING SECTION */}
+              <section id="pricing" className="py-32 px-6 bg-white dark:bg-slate-950 relative z-10">
+                <div className="container mx-auto max-w-6xl text-center">
+                  <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mb-20 space-y-4">
+                    <h2 className="text-4xl md:text-6xl font-black tracking-tight text-slate-900 dark:text-white">Inversión inteligente. Retorno masivo.</h2>
+                    <p className="text-xl text-slate-600 dark:text-slate-400">Paga una vez, usa tu propia API Key de Google (Gratis) y olvídate de cuotas mensuales.</p>
+                  </motion.div>
+                  
+                  <div className="grid md:grid-cols-3 gap-8 items-center">
+                     <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="p-10 rounded-[32px] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-left shadow-lg">
+                        <h3 className="font-bold text-2xl mb-2 text-slate-900 dark:text-white">Demo</h3>
+                        <div className="text-5xl font-black mb-6 text-slate-900 dark:text-white">$0</div>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-8 font-medium">Prueba la herramienta gratis.</p>
+                        <Button variant="outline" size="lg" className="w-full rounded-2xl h-14 font-bold text-base border-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-white" onClick={() => setView("viral")}>Probar Ahora</Button>
+                     </motion.div>
+
+                     <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }} className="p-10 rounded-[32px] border-4 border-primary bg-white dark:bg-slate-900 text-left relative shadow-2xl shadow-primary/20 transform scale-105 z-10">
+                        <div className="absolute -top-6 inset-x-0 flex justify-center">
+                            <div className="bg-primary text-white text-sm font-black px-6 py-2 rounded-full shadow-lg uppercase tracking-wider flex items-center gap-2"><Star className="w-4 h-4 fill-current" /> Oferta Limitada</div>
+                        </div>
+                        <h3 className="font-bold text-2xl mb-2 text-slate-900 dark:text-white flex items-center gap-2">Lifetime Access</h3>
+                        <div className="text-5xl font-black mb-6 text-slate-900 dark:text-white">$149<span className="text-lg font-normal text-slate-500">/único</span></div>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-8 font-medium">Acceso de por vida. Sin suscripciones.</p>
+                        <ul className="space-y-4 mb-10 text-sm font-bold text-slate-900 dark:text-white">
+                           <li className="flex gap-3 items-center"><Check className="w-5 h-5 text-primary shrink-0" /> Búsquedas Ilimitadas</li>
+                           <li className="flex gap-3 items-center"><Check className="w-5 h-5 text-primary shrink-0" /> Generador de Guiones IA</li>
+                           <li className="flex gap-3 items-center"><Check className="w-5 h-5 text-primary shrink-0" /> Soporte Premium</li>
+                        </ul>
+                        <Button size="lg" className="w-full rounded-2xl h-14 font-bold text-xl shadow-xl shadow-primary/30 hover:shadow-primary/50 hover:scale-105 transition-all">Comprar Licencia</Button>
+                     </motion.div>
+
+                     <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.2 }} className="p-10 rounded-[32px] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-left shadow-lg">
+                        <h3 className="font-bold text-2xl mb-2 text-slate-900 dark:text-white">Agencias</h3>
+                        <div className="text-5xl font-black mb-6 text-slate-900 dark:text-white">Custom</div>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-8 font-medium">Para equipos grandes.</p>
+                        <Button variant="outline" size="lg" className="w-full rounded-2xl h-14 font-bold text-base border-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-white">Contactar Ventas</Button>
+                     </motion.div>
+                  </div>
+                </div>
+              </section>
+
+              {/* FOOTER */}
+              <footer className="py-16 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-black relative z-10">
+                 <div className="container mx-auto px-6 text-center text-sm text-muted-foreground">
+                    <div className="flex items-center justify-center gap-2 font-black text-xl tracking-tighter text-slate-900 dark:text-white mb-6">
+                        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white"><Zap className="w-5 h-5 fill-current" /></div>
+                        ViralTrends<span className="text-primary">.ai</span>
+                    </div>
+                    <p>© 2026 ViralTrends AI. Todos los derechos reservados.</p>
+                 </div>
+              </footer>
 
             </div>
           )}
 
-          {/* APP VIEWS */}
+          {/* =====================================================================================
+              FIN LANDING PAGE - ABAJO SIGUEN LAS VISTAS DE LA APP (DASHBOARD)
+             ===================================================================================== */}
+
           {view === "videos" && (
             <section className="max-w-7xl mx-auto px-6 md:px-10 py-10 space-y-8 animate-in fade-in">
               <ViralSearchHeader query={query} onChangeQuery={setQuery} onSearch={handleSearch} filters={filters} onOpenFilters={() => setShowFilters(true)} />
@@ -459,7 +663,7 @@ export default function ViralApp() {
           )}
         </main>
 
-        {/* MODAL DETALLE (Se mantiene igual) */}
+        {/* --- MODAL DETALLE VIDEO --- */}
         {selected && (
           <div className="fixed inset-0 z-50 grid place-items-center bg-background/60 backdrop-blur p-4" onClick={() => setSelected(null)}>
             <div className="w-full max-w-5xl rounded-3xl border border-border bg-card shadow-2xl overflow-hidden flex flex-col md:flex-row max-h-[90vh]" onClick={e => e.stopPropagation()}>
@@ -568,32 +772,9 @@ export default function ViralApp() {
         )}
       </div>
 
-      {/* DIALOG PARA BÚSQUEDA MANUAL */}
-      <ViralFiltersDialog 
-        open={showFilters} 
-        onOpenChange={setShowFilters} 
-        value={filters} 
-        onApply={(newFilters) => { 
-            setFilters(newFilters); // Actualizamos estado visual
-            if (view === "videos") {
-                // Ejecutamos búsqueda YA con los datos nuevos
-                handleSearchGeneric(query, newFilters, false); 
-            }
-        }} 
-      />
-
-      {/* DIALOG PARA EXPLORADOR VIRAL */}
-      <ViralFiltersDialog 
-        open={showViralFilters} 
-        onOpenChange={setShowViralFilters} 
-        value={viralFilters} 
-        onApply={(newFilters) => { 
-            setViralFilters(newFilters); // Actualizamos estado visual
-            // Ejecutamos búsqueda YA con los datos nuevos
-            const topicToSearch = viralTopic || viralInput;
-            handleSearchGeneric(topicToSearch, newFilters, true); 
-        }} 
-      />
+      <ViralFiltersDialog open={showFilters} onOpenChange={setShowFilters} value={filters} onChange={setFilters} onApply={(newFilters) => { setFilters(newFilters); if (view === "videos") handleSearchGeneric(query, newFilters, false); }} />
+      <ViralFiltersDialog open={showViralFilters} onOpenChange={setShowViralFilters} value={viralFilters} onChange={setViralFilters} onApply={(newFilters) => { setViralFilters(newFilters); const topicToSearch = viralTopic || viralInput; handleSearchGeneric(topicToSearch, newFilters, true); }} />
+      <ViralSettingsDialog open={showSettings} onOpenChange={setShowSettings} isDark={isDark} onToggleTheme={toggleTheme} />
     </div>
   );
 }

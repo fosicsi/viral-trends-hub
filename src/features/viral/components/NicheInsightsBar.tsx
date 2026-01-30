@@ -20,7 +20,7 @@ function extractTopKeywords(titles: string[], limit: number): string[] {
     const cleaned = String(t || "")
       .toLowerCase()
       .replace(/https?:\/\/\S+/g, " ")
-      .replace(/[^\p{L}\p{N}#]+/gu, " ") // Mantener letras, números y hashtags
+      .replace(/[^\p{L}\p{N}#]+/gu, " ") 
       .trim();
 
     for (const w of cleaned.split(/\s+/g)) {
@@ -37,22 +37,25 @@ function extractTopKeywords(titles: string[], limit: number): string[] {
     .map(([k]) => k);
 }
 
-function getNicheVerdict(avgRatio: number, smallCreators: number) {
-  if (smallCreators > 3 && avgRatio > 2) {
+function getNicheVerdict(avgRatio: number, uniqueSmallCreators: number) {
+  // Ajustamos la lógica: Si hay AL MENOS 1 canal pequeño rompiéndola, ya es buena señal.
+  // Si hay muchos (más de 3 únicos), es un nicho de oro.
+  
+  if (uniqueSmallCreators >= 3 && avgRatio > 2) {
     return { 
       label: "🔥 NICHO DE ORO", 
-      desc: "Muchos canales pequeños haciéndose virales. ¡Ataca ahora!",
+      desc: "Varios canales pequeños creciendo rápido. ¡Entra ya!",
       color: "text-amber-500 bg-amber-500/10 border-amber-500/20"
     };
   }
-  if (smallCreators > 0 && avgRatio > 1) {
+  if (uniqueSmallCreators >= 1 && avgRatio > 1.5) {
     return { 
       label: "🟢 BUENA OPORTUNIDAD", 
-      desc: "Hay espacio para crecer si el contenido es bueno.",
+      desc: "Hay espacio. Al menos un canal pequeño tiene éxito.",
       color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20"
     };
   }
-  if (smallCreators === 0) {
+  if (uniqueSmallCreators === 0) {
     return { 
       label: "🔴 MUY COMPETIDO", 
       desc: "Dominado por gigantes. Difícil para empezar.",
@@ -72,11 +75,18 @@ function computeInsights(items: VideoItem[]) {
   const totalViews = items.reduce((acc, v) => acc + (Number.isFinite(v.views) ? v.views : 0), 0);
   const avgViews = totalViews / items.length;
   
-  // Contamos canales reales pequeños (filtro un poco más estricto: < 10k)
-  const smallCreatorsCount = items.filter((v) => (v.channelSubscribers ?? 0) < 10_000).length;
+  // --- CORRECCIÓN DE CÓMPUTO DE CANALES ---
+  // 1. Filtramos los videos de canales pequeños (< 10k)
+  const smallChannelVideos = items.filter((v) => (v.channelSubscribers ?? 0) < 10_000);
   
-  // Calculamos el "Viral Score" promedio (Growth Ratio)
-  // Cuántas veces supera las vistas a los subs
+  // 2. Extraemos los nombres (o IDs) únicos para no contar el mismo canal 10 veces
+  const uniqueSmallChannels = new Set(
+    smallChannelVideos.map(v => v.channel || v.channelTitle || "Unknown")
+  );
+  
+  const smallCreatorsCount = uniqueSmallChannels.size;
+  // ----------------------------------------
+  
   const totalRatio = items.reduce((acc, v) => acc + (v.growthRatio || 0), 0);
   const avgRatio = totalRatio / items.length;
 
@@ -93,7 +103,6 @@ function computeInsights(items: VideoItem[]) {
 export function NicheInsightsBar({ items, onKeywordClick }: { items: VideoItem[]; onKeywordClick?: (keyword: string) => void }) {
   const insights = React.useMemo(() => computeInsights(items), [items]);
 
-  // ESTADO VACÍO (Antes de buscar)
   if (!insights) {
     return (
       <section className="rounded-[24px] border border-border bg-card/50 p-6 text-center border-dashed">
@@ -117,7 +126,6 @@ export function NicheInsightsBar({ items, onKeywordClick }: { items: VideoItem[]
            </h3>
         </div>
         
-        {/* LA NUEVA ETIQUETA DE VEREDICTO */}
         <div className={`px-4 py-2 rounded-xl border flex items-center gap-3 ${verdict.color}`}>
           <Trophy size={18} />
           <div className="text-left">
@@ -129,7 +137,7 @@ export function NicheInsightsBar({ items, onKeywordClick }: { items: VideoItem[]
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         
-        {/* 1) Oportunidad de Canal (Small Creators) */}
+        {/* 1) Oportunidad de Canal (Small Creators ÚNICOS) */}
         <div className="rounded-2xl border border-border bg-surface p-4 flex flex-col justify-between">
           <div className="flex items-center gap-2 mb-2">
             <Users size={16} className="text-blue-500" />
@@ -138,10 +146,12 @@ export function NicheInsightsBar({ items, onKeywordClick }: { items: VideoItem[]
           <div>
             <div className="flex items-baseline gap-1">
               <span className="text-2xl font-black">{insights.smallCreatorsCount}</span>
-              <span className="text-xs font-medium text-muted-foreground">canales pequeños</span>
+              <span className="text-xs font-medium text-muted-foreground">
+                {insights.smallCreatorsCount === 1 ? "canal pequeño único" : "canales pequeños únicos"}
+              </span>
             </div>
             <p className="text-[11px] text-muted-foreground mt-1 leading-tight">
-              Videos virales de creadores con menos de 10k subs en esta búsqueda.
+              Creadores distintos con menos de 10k subs posicionados en esta búsqueda.
             </p>
           </div>
         </div>
@@ -163,7 +173,7 @@ export function NicheInsightsBar({ items, onKeywordClick }: { items: VideoItem[]
           </div>
         </div>
 
-        {/* 3) Palabras Clave (Clickables) */}
+        {/* 3) Palabras Clave */}
         <div className="rounded-2xl border border-border bg-surface p-4">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles size={16} className="text-purple-500" />

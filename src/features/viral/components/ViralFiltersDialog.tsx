@@ -1,143 +1,162 @@
 import * as React from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { SlidersHorizontal, Eye, Users, Calendar, RotateCcw } from "lucide-react";
 import type { ViralFilters } from "../types";
-import { formatNumber } from "@/lib/format";
 
-export function ViralFiltersDialog({
-  open,
-  onOpenChange,
-  value,
-  onChange,
-  onApply,
-}: {
+interface ViralFiltersDialogProps {
   open: boolean;
-  onOpenChange: (v: boolean) => void;
+  onOpenChange: (open: boolean) => void;
   value: ViralFilters;
-  onChange: (v: ViralFilters) => void;
-  onApply: () => void;
-}) {
-  const set = (patch: Partial<ViralFilters>) => onChange({ ...value, ...patch });
+  // Modificamos onApply para que reciba los filtros nuevos
+  onApply: (filters: ViralFilters) => void; 
+}
+
+export function ViralFiltersDialog({ open, onOpenChange, value, onApply }: ViralFiltersDialogProps) {
+  
+  const [localFilters, setLocalFilters] = React.useState<ViralFilters>(value);
+
+  // Sincronizar cuando se abre el modal
+  React.useEffect(() => {
+    if (open) setLocalFilters(value);
+  }, [open, value]);
+
+  const handleReset = () => {
+    const defaults: ViralFilters = {
+        minViews: 5000, // Bajamos el default para encontrar más cosas
+        maxSubs: 500000,
+        date: "year",
+        type: "video",
+        order: "relevance"
+    };
+    setLocalFilters(defaults);
+  };
+
+  const handleNumberChange = (field: keyof ViralFilters, val: string) => {
+    // Permitir vacío mientras se escribe, pero convertir a número al guardar
+    const cleanVal = val.replace(/[^0-9]/g, '');
+    const num = cleanVal === '' ? 0 : parseInt(cleanVal);
+    setLocalFilters(prev => ({ ...prev, [field]: num }));
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl rounded-3xl bg-card border border-border">
+      <DialogContent className="sm:max-w-[450px] bg-card border-border shadow-2xl">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-extrabold">Filtros</DialogTitle>
+          <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2 text-xl font-black">
+                <SlidersHorizontal className="w-5 h-5 text-primary" /> Filtros de Radar
+              </DialogTitle>
+              <Button variant="ghost" size="sm" onClick={handleReset} className="text-xs text-muted-foreground hover:text-red-400 h-8">
+                <RotateCcw className="w-3 h-3 mr-1" /> Reset
+              </Button>
+          </div>
+          <DialogDescription>
+            Define los umbrales para detectar oportunidades.
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Vistas mínimas</Label>
-                <span className="text-xs font-extrabold bg-primary/10 text-primary px-2 py-1 rounded-full border border-primary/20">
-                  {formatNumber(value.minViews)}+
-                </span>
-              </div>
-              <div className="rounded-2xl border border-border bg-surface p-4">
-                <Slider
-                  value={[value.minViews]}
-                  onValueChange={([v]) => set({ minViews: v })}
-                  max={5_000_000}
-                  step={10_000}
-                />
-              </div>
+        <div className="grid gap-8 py-6">
+          
+          {/* MÍNIMO DE VISTAS */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-2 font-bold text-muted-foreground">
+                    <Eye className="w-4 h-4" /> Mínimo de Vistas
+                </Label>
+                <div className="relative w-32">
+                    <Input 
+                        type="text" 
+                        value={localFilters.minViews || ''} 
+                        onChange={(e) => handleNumberChange('minViews', e.target.value)}
+                        placeholder="Ej: 5000"
+                        className="h-8 text-right pr-2 font-mono text-sm font-bold bg-surface border-border"
+                    />
+                </div>
             </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Máx subs del canal</Label>
-                <span className="text-xs font-extrabold bg-accent/10 text-foreground px-2 py-1 rounded-full border border-accent/20">
-                  {formatNumber(value.maxSubs)}
-                </span>
-              </div>
-              <div className="rounded-2xl border border-border bg-surface p-4">
-                <Slider
-                  value={[value.maxSubs]}
-                  onValueChange={([v]) => set({ maxSubs: v })}
-                  min={1_000}
-                  max={1_000_000}
-                  step={10_000}
-                />
-              </div>
+            <Slider
+              min={0}
+              max={1000000}
+              step={500} // Paso más fino para mayor precisión
+              value={[localFilters.minViews]}
+              onValueChange={([v]) => setLocalFilters({ ...localFilters, minViews: v })}
+              className="py-2"
+            />
+            <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
+                <span>0</span>
+                <span>500k</span>
+                <span>1M+</span>
             </div>
           </div>
 
-          <div className="space-y-6">
-            <div className="space-y-3">
-              <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Orden</Label>
-              <div className="grid grid-cols-2 gap-3">
-                {(
-                  [
-                    { id: "viewCount", label: "Más vistas" },
-                    { id: "date", label: "Tendencia" },
-                  ] as const
-                ).map((opt) => (
-                  <button
-                    key={opt.id}
-                    onClick={() => set({ order: opt.id })}
-                    className={
-                      value.order === opt.id
-                        ? "py-3 px-4 rounded-2xl text-sm font-extrabold border border-primary/40 bg-primary/10"
-                        : "py-3 px-4 rounded-2xl text-sm font-bold border border-border bg-surface text-muted-foreground hover:text-foreground"
-                    }
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Nota: la búsqueda está optimizada para Shorts (≤ 60s) de forma estricta.
-              </p>
+          {/* MÁXIMO DE SUBS */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-2 font-bold text-muted-foreground">
+                    <Users className="w-4 h-4" /> Máximo de Subs
+                </Label>
+                <div className="relative w-32">
+                    <Input 
+                        type="text" 
+                        value={localFilters.maxSubs || ''} 
+                        onChange={(e) => handleNumberChange('maxSubs', e.target.value)}
+                        placeholder="Ej: 500000"
+                        className="h-8 text-right pr-2 font-mono text-sm font-bold bg-surface border-border"
+                    />
+                </div>
             </div>
+            <Slider
+              min={0}
+              max={5000000}
+              step={5000}
+              value={[localFilters.maxSubs]}
+              onValueChange={([v]) => setLocalFilters({ ...localFilters, maxSubs: v })}
+              className="py-2"
+            />
+            <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
+                <span>0</span>
+                <span>Canales Medios</span>
+                <span>5M (Grandes)</span>
+            </div>
+          </div>
 
-            <div className="space-y-3">
-              <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Publicación</Label>
-              <div className="grid grid-cols-2 gap-3">
-                {(
-                  [
-                    { id: "all", label: "Siempre" },
-                    { id: "year", label: "Último año" },
-                    { id: "month", label: "Último mes" },
-                    { id: "week", label: "Esta semana" },
-                  ] as const
-                ).map((opt) => (
-                  <button
-                    key={opt.id}
-                    onClick={() => set({ date: opt.id })}
-                    className={
-                      value.date === opt.id
-                        ? "py-3 px-4 rounded-2xl text-sm font-extrabold border border-accent/40 bg-accent/10"
-                        : "py-3 px-4 rounded-2xl text-sm font-bold border border-border bg-surface text-muted-foreground hover:text-foreground"
-                    }
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+          {/* FECHA */}
+          <div className="space-y-3">
+            <Label className="flex items-center gap-2 font-bold text-muted-foreground">
+                <Calendar className="w-4 h-4" /> Antigüedad del Video
+            </Label>
+            <Select 
+                value={localFilters.date} 
+                onValueChange={(v: any) => setLocalFilters({ ...localFilters, date: v })}
+            >
+              <SelectTrigger className="w-full bg-surface border-border font-medium">
+                <SelectValue placeholder="Seleccionar periodo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="week">Esta Semana (Tendencias Hot)</SelectItem>
+                <SelectItem value="month">Este Mes (Consolidado)</SelectItem>
+                <SelectItem value="year">Este Año (Evergreen)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
-        <div className="flex items-center justify-between pt-2">
-          <Button
-            variant="ghost"
-            onClick={() => onChange({ minViews: 10_000, maxSubs: 500_000, date: "year", type: "short", order: "viewCount" })}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button 
+            onClick={() => {
+                onApply(localFilters); // Enviamos los datos frescos
+                onOpenChange(false);
+            }} 
+            className="font-bold bg-primary hover:bg-primary/90 text-white w-full sm:w-auto"
           >
-            Restablecer
+            Aplicar Filtros
           </Button>
-          <div className="flex gap-3">
-            <Button variant="soft" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button variant="hero" onClick={onApply}>
-              Aplicar
-            </Button>
-          </div>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

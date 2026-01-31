@@ -1,15 +1,16 @@
-import { 
-  Home, 
-  Flame, 
-  Search, 
-  Settings, 
-  Moon, 
+import {
+  Home,
+  Flame,
+  Search,
+  Settings,
+  Moon,
   Sun,
-  Bookmark
+  Bookmark,
+  HelpCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type ViralView = "home" | "viral" | "videos" | "saved" | "tools";
+export type ViralView = "home" | "viral" | "videos" | "saved" | "tools" | "glossary";
 
 interface ViralSidebarProps {
   view: ViralView;
@@ -19,38 +20,38 @@ interface ViralSidebarProps {
   onToggleTheme: () => void;
 }
 
-export function ViralSidebar({ 
-  view, 
-  onChangeView, 
+export function ViralSidebar({
+  view,
+  onChangeView,
   onOpenSettings,
   isDark,
   onToggleTheme
 }: ViralSidebarProps) {
-  
-  const NavItem = ({ 
-    id, 
-    icon: Icon, 
-    label 
-  }: { 
-    id: ViralView; 
-    icon: any; 
-    label: string 
+
+  const NavItem = ({
+    id,
+    icon: Icon,
+    label
+  }: {
+    id: ViralView;
+    icon: any;
+    label: string
   }) => (
     <button
       onClick={() => onChangeView(id)}
       className={cn(
         "group flex w-full flex-col items-center justify-center gap-1 rounded-2xl p-3 transition-all duration-300",
-        view === id 
-          ? "bg-primary/10 text-primary shadow-glow-sm" 
+        view === id
+          ? "bg-primary/10 text-primary shadow-glow-sm"
           : "text-muted-foreground hover:bg-surface hover:text-foreground"
       )}
     >
-      <Icon 
+      <Icon
         className={cn(
-          "h-6 w-6 transition-transform duration-300 group-hover:scale-110", 
-          view === id && "fill-current"
-        )} 
-        strokeWidth={2}
+          "h-6 w-6 transition-transform duration-300 group-hover:scale-110",
+          view === id ? "text-primary" : "text-muted-foreground"
+        )}
+        strokeWidth={view === id ? 2.5 : 2}
       />
       <span className="text-[10px] font-bold tracking-wide">{label}</span>
     </button>
@@ -60,11 +61,11 @@ export function ViralSidebar({
     <aside className="hidden h-screen w-[90px] flex-col items-center justify-between border-r border-border/50 bg-background/95 py-6 backdrop-blur-xl transition-all sm:flex z-50">
       {/* Top: Logo simplificado o Home */}
       <div className="flex flex-col gap-6">
-        <button 
-            onClick={() => onChangeView("home")}
-            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-purple-600 shadow-glow transition-transform hover:scale-105"
+        <button
+          onClick={() => onChangeView("home")}
+          className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-purple-600 shadow-glow transition-transform hover:scale-105"
         >
-            <Flame className="h-6 w-6 text-white fill-white" />
+          <Flame className="h-6 w-6 text-white fill-white" />
         </button>
 
         <nav className="flex flex-col gap-3 mt-4">
@@ -72,12 +73,13 @@ export function ViralSidebar({
           <NavItem id="viral" icon={Flame} label="Viral" />
           <NavItem id="videos" icon={Search} label="Buscar" />
           <NavItem id="saved" icon={Bookmark} label="Saved" />
+          <NavItem id="glossary" icon={HelpCircle} label="Glosario" />
         </nav>
       </div>
 
       {/* Bottom: Settings & Theme */}
       <div className="flex flex-col gap-4 items-center mb-2">
-        
+
         {/* Interruptor de Tema */}
         <button
           onClick={onToggleTheme}

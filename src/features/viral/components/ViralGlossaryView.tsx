@@ -32,7 +32,10 @@ import {
     Sparkles,
     Cpu,
     Coffee,
-    ExternalLink
+    ExternalLink,
+    Palette,
+    Ghost,
+    ShoppingBag
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
@@ -46,14 +49,141 @@ const GLOSSARY_CATEGORIES = [
 ];
 
 const GLOSSARY_TERMS = [
-    // PLATFORMS
     {
-        term: "YouTube Shorts",
+        term: "AdSense (Mid-roll / Anuncios)",
+        category: "monetization",
+        definition: "Anuncios insertados en medio del video. Requieren >8 min de duración. La clave de los ingresos pasivos altos.",
+        icon: DollarSign,
+        color: "text-green-600",
+        bg: "bg-green-600/10"
+    },
+    {
+        term: "Affiliate Marketing (Afiliados)",
+        category: "monetization",
+        definition: "Ganar comisiones por ventas realizadas a través de tus enlaces (ej: Amazon Associates en la descripción).",
+        icon: ExternalLink,
+        color: "text-blue-400",
+        bg: "bg-blue-400/10"
+    },
+    {
+        term: "APV (Porcentaje Promedio Visto)",
+        category: "metrics",
+        definition: "Average % Viewed. En Shorts/Reels, buscas >100% (loops) para viralidad masiva.",
+        icon: TrendingUp,
+        color: "text-emerald-500",
+        bg: "bg-emerald-500/10"
+    },
+    {
+        term: "ASMR (Respuesta Sensorial)",
+        category: "niches",
+        definition: "Contenido enfocado en sonidos y estimulación visual. Altísima retención porque el usuario lo usa para relajarse.",
+        icon: Mic,
+        color: "text-emerald-400",
+        bg: "bg-emerald-400/10"
+    },
+    {
+        term: "AVD (Duración Media de Vista)",
+        category: "metrics",
+        definition: "Average View Duration. En video largo, 8m+ permite más mid-rolls y dispara el RPM.",
+        icon: Clock,
+        color: "text-rose-500",
+        bg: "bg-rose-500/10"
+    },
+    {
+        term: "B-roll (Metraje Secundario)",
+        category: "production",
+        definition: "Metraje de apoyo que ilustra lo que dices. Evita el 'aburrimiento visual' y mantiene al cerebro enganchado.",
+        icon: Video,
+        color: "text-indigo-500",
+        bg: "bg-indigo-500/10"
+    },
+    {
+        term: "Brand Deal (Campaña de Marca)",
+        category: "monetization",
+        definition: "Colaboración pagada. Puede ser 'dedicada' (todo el video) o 'integrada' (60-90s).",
+        icon: Target,
+        color: "text-primary",
+        bg: "bg-primary/10"
+    },
+    {
+        term: "Carousel (Carrusel)",
         category: "platforms",
-        definition: "Formato vertical <60s. Ideal para crecimiento orgánico rápido y exposición masiva en el Feed de Shorts.",
-        icon: Smartphone,
-        color: "text-red-600",
-        bg: "bg-red-600/10"
+        definition: "Formato de múltiples imágenes/videos en IG/TikTok. Aumenta el tiempo en pantalla al invitar a deslizar.",
+        icon: Layers,
+        color: "text-purple-600",
+        bg: "bg-purple-600/10"
+    },
+    {
+        term: "Cash Cow (Canal Automatizado)",
+        category: "niches",
+        definition: "Canales diseñados únicamente para generar ingresos pasivos (AdSense) en nichos de alto RPM sin mostrar el rostro.",
+        icon: Coins,
+        color: "text-amber-500",
+        bg: "bg-amber-500/10"
+    },
+    {
+        term: "Color Grading (Etalonaje)",
+        category: "production",
+        definition: "Corrección de color. Dar un look cinematográfico o vibrante para retener la atención visual y transmitir emociones.",
+        icon: Palette,
+        color: "text-pink-500",
+        bg: "bg-pink-500/10"
+    },
+    {
+        term: "Community Tab (Comunidad)",
+        category: "platforms",
+        definition: "Pestaña para encuestas e imágenes. Mantiene activa a la audiencia entre videos largos.",
+        icon: MessageSquare,
+        color: "text-blue-500",
+        bg: "bg-blue-500/10"
+    },
+    {
+        term: "CTR (Tasa de Clics)",
+        category: "metrics",
+        definition: "Click-Through Rate. Efectividad de tu 'empaque' (Miniatura + Título). Es el porcentaje de clics sobre impresiones totales.",
+        icon: MousePointerClick,
+        color: "text-blue-600",
+        bg: "bg-blue-600/10"
+    },
+    {
+        term: "Evergreen Content (Contenido Perenne)",
+        category: "niches",
+        definition: "Contenido que no caduca (tutoriales, salud). Genera vistas e ingresos constantes durante años.",
+        icon: Repeat,
+        color: "text-green-600",
+        bg: "bg-green-600/10"
+    },
+    {
+        term: "Faceless Channel (Canal Sin Rostro)",
+        category: "niches",
+        definition: "Utiliza voz en off, stock footage o animación. Ideal para escalabilidad y venta de canales.",
+        icon: Ghost,
+        color: "text-slate-500",
+        bg: "bg-slate-500/10"
+    },
+    {
+        term: "Finanzas (Alto CPM)",
+        category: "niches",
+        definition: "Nicho de alto valor. Términos como ROI, Bull Market o Pasivos atraen anuncios premium que pagan hasta 10x más.",
+        icon: Coins,
+        color: "text-amber-500",
+        bg: "bg-amber-500/10"
+    },
+    {
+        term: "Gaming (Outliers / Anomalías)",
+        category: "niches",
+        definition: "En gaming, los outliers suelen ser desafíos inesperados, bugs épicos o lanzamientos de juegos indie poco conocidos.",
+        icon: Gamepad2,
+        color: "text-green-500",
+        bg: "bg-green-500/10"
+    },
+    {
+        term: "Hook (Gancho)",
+        category: "production",
+        definition: "Los primeros 3 segundos. Sin hook no hay retención; sin retención no hay views. Es la base de ViralTrends.",
+        icon: Wand2,
+        color: "text-purple-500",
+        bg: "bg-purple-500/10"
     },
     {
         term: "Instagram Reels",
@@ -64,30 +194,68 @@ const GLOSSARY_TERMS = [
         bg: "bg-pink-600/10"
     },
     {
-        term: "TikTok (FYP)",
-        category: "platforms",
-        definition: "For You Page. El algoritmo de recomendación más potente basado en intereses puros y tiempo de visualización.",
-        icon: Music,
-        color: "text-cyan-500",
-        bg: "bg-cyan-500/10"
+        term: "Jump Cuts (Cortes Directos)",
+        category: "production",
+        definition: "Edición sin pausas ni silencios. Esencial en videos cortos para maximizar la densidad de información.",
+        icon: PlayCircle,
+        color: "text-red-500",
+        bg: "bg-red-500/10"
     },
     {
-        term: "Remix / Duet",
+        term: "Lifestyle (Estilo de Vida)",
+        category: "niches",
+        definition: "GRWM (Alístate conmigo) / DITL (Un día en mi vida). Contenido que humaniza la marca y genera confianza.",
+        icon: Coffee,
+        color: "text-orange-500",
+        bg: "bg-orange-500/10"
+    },
+    {
+        term: "Live Shopping (Ventas en Vivo)",
+        category: "monetization",
+        definition: "Transmisiones en vivo enfocadas en venta directa. Altas tasas de conversión impulsivas.",
+        icon: ShoppingBag,
+        color: "text-red-500",
+        bg: "bg-red-500/10"
+    },
+    {
+        term: "Merch Shelf (Escaparate)",
+        category: "monetization",
+        definition: "Estante de productos oficial debajo del video de YouTube. Conversión orgánica sin ser intrusivo.",
+        icon: ShoppingBag,
+        color: "text-violet-500",
+        bg: "bg-violet-500/10"
+    },
+    {
+        term: "Pattern Interrupt (Ruptura de Patrón)",
+        category: "production",
+        definition: "Cambio brusco visual o auditivo cada 3-5s para re-capturar la atención del cerebro y evitar el scroll.",
+        icon: Zap,
+        color: "text-yellow-500",
+        bg: "bg-yellow-500/10"
+    },
+    {
+        term: "POV (Punto de Vista)",
+        category: "niches",
+        definition: "Point of View. Sumerge al espectador en una situación específica. Muy viral en TikTok para generar empatía.",
+        icon: Sparkles,
+        color: "text-purple-400",
+        bg: "bg-purple-400/10"
+    },
+    {
+        term: "Prompt AI (Instrucción IA)",
+        category: "production",
+        definition: "Instrucciones para IA. Un buen prompt genera guiones que parecen escritos por un director de cine de Hollywood.",
+        icon: MessageSquare,
+        color: "text-violet-500",
+        bg: "bg-violet-500/10"
+    },
+    {
+        term: "Remix / Duet (Dúo)",
         category: "platforms",
         definition: "Función para reaccionar o colaborar con videos existentes. Dispara la viralidad por 'ecos' del contenido original.",
         icon: Repeat,
         color: "text-blue-500",
         bg: "bg-blue-500/10"
-    },
-
-    // METRICS
-    {
-        term: "CTR (Click-Through Rate)",
-        category: "metrics",
-        definition: "Efectividad de tu 'empaque' (Miniatura + Título). Es el porcentaje de clics sobre impresiones totales.",
-        icon: MousePointerClick,
-        color: "text-blue-600",
-        bg: "bg-blue-600/10"
     },
     {
         term: "Retención (Retention)",
@@ -98,6 +266,94 @@ const GLOSSARY_TERMS = [
         bg: "bg-emerald-500/10"
     },
     {
+        term: "RPM / CPM (Ingresos)",
+        category: "metrics",
+        definition: "RPM: Lo que ganas tú por cada 1000 vistas. CPM: Lo que paga el anunciante. Varía según el nicho.",
+        icon: DollarSign,
+        color: "text-green-600",
+        bg: "bg-green-600/10"
+    },
+    {
+        term: "Shadowban (Baneo Fantasma)",
+        category: "niches",
+        definition: "Restricción invisible del alcance. Ocurre por reportes masivos o por intentar engañar al algoritmo con spam.",
+        icon: ShieldAlert,
+        color: "text-rose-600",
+        bg: "bg-rose-600/10"
+    },
+    {
+        term: "Sound Design (Diseño Sonoro)",
+        category: "production",
+        definition: "SFX (efectos de sonido) que subrayan acciones y evitan que el espectador se aburra.",
+        icon: Music,
+        color: "text-blue-500",
+        bg: "bg-blue-500/10"
+    },
+    {
+        term: "Sponsorships (Patrocinios)",
+        category: "monetization",
+        definition: "Patrocinios directos de marcas. Suelen pagar mucho más que los anuncios de AdSense en nichos específicos.",
+        icon: Target,
+        color: "text-primary",
+        bg: "bg-primary/10"
+    },
+    {
+        term: "Super Thanks / Chats (Propinas)",
+        category: "monetization",
+        definition: "Propinas digitales que los fans envían para destacar sus comentarios o agradecer el valor aportado.",
+        icon: Heart,
+        color: "text-pink-600",
+        bg: "bg-pink-600/10"
+    },
+    {
+        term: "Swipe Rate (Tasa de Deslizamiento)",
+        category: "metrics",
+        definition: "En Shorts: % de usuarios que eligen ver el video vs. % que deslizan (swipe away). Debe ser >60% para ser viral.",
+        icon: Smartphone,
+        color: "text-purple-600",
+        bg: "bg-purple-600/10"
+    },
+    {
+        term: "Tech (Tecnología)",
+        category: "niches",
+        definition: "Unboxing y Reviews. El usuario busca confirmación antes de comprar, lo que genera un 'intent' de compra muy alto.",
+        icon: Cpu,
+        color: "text-blue-500",
+        bg: "bg-blue-500/10"
+    },
+    {
+        term: "Text-to-Video (Texto a Video)",
+        category: "production",
+        definition: "Generación automática de imágenes o escenas a partir de guiones. Permite automatizar canales al 100%.",
+        icon: Cpu,
+        color: "text-cyan-600",
+        bg: "bg-cyan-600/10"
+    },
+    {
+        term: "TikTok (FYP)",
+        category: "platforms",
+        definition: "For You Page. El algoritmo de recomendación más potente basado en intereses puros y tiempo de visualización.",
+        icon: Music,
+        color: "text-cyan-500",
+        bg: "bg-cyan-500/10"
+    },
+    {
+        term: "UGC (Contenido de Usuario)",
+        category: "niches",
+        definition: "User Generated Content. Contenido que parece grabado por un usuario normal. Es el formato de anuncio que mejor convierte.",
+        icon: Users,
+        color: "text-indigo-400",
+        bg: "bg-indigo-400/10"
+    },
+    {
+        term: "Velocity (Velocidad Viral)",
+        category: "metrics",
+        definition: "Vistas obtenidas en las primeras 24h. Determina si el video entra en 'Tendencias' o muere.",
+        icon: Zap,
+        color: "text-yellow-600",
+        bg: "bg-yellow-600/10"
+    },
+    {
         term: "VPH (Vistas por Hora)",
         category: "metrics",
         definition: "Velocidad de crucero de un video. Si sube, el video está 'explotando'. Si baja, la tendencia está muriendo.",
@@ -106,15 +362,7 @@ const GLOSSARY_TERMS = [
         bg: "bg-green-500/10"
     },
     {
-        term: "Swipe Rate",
-        category: "metrics",
-        definition: "En Shorts: % de usuarios que eligen ver el video vs. % que deslizan (swipe away). Debe ser >60% para ser viral.",
-        icon: Smartphone,
-        color: "text-purple-600",
-        bg: "bg-purple-600/10"
-    },
-    {
-        term: "Watch Time",
+        term: "Watch Time (Tiempo de Visualización)",
         category: "metrics",
         definition: "Minutos totales acumulados. YouTube premia videos que mantienen a la gente en la plataforma por más tiempo.",
         icon: Clock,
@@ -122,154 +370,20 @@ const GLOSSARY_TERMS = [
         bg: "bg-rose-500/10"
     },
     {
-        term: "RPM / CPM",
-        category: "metrics",
-        definition: "CPM: Lo que paga el anunciante. RPM: Lo que ganas tú por cada 1000 vistas. Varía según el poder adquisitivo del nicho.",
-        icon: DollarSign,
-        color: "text-green-600",
-        bg: "bg-green-600/10"
+        term: "YouTube Shorts",
+        category: "platforms",
+        definition: "Formato vertical <60s. Ideal para crecimiento orgánico rápido y exposición masiva en el Feed de Shorts.",
+        icon: Smartphone,
+        color: "text-red-600",
+        bg: "bg-red-600/10"
     },
-
-    // NEGOCIO / MONETIZATION
     {
-        term: "YPP (Partner Program)",
+        term: "YPP (Programa de Socios)",
         category: "monetization",
-        definition: "Programa de socios de YouTube. Requisitos: 1k suscriptores y 4k horas de visualización (o 10M de vistas en Shorts).",
+        definition: "YouTube Partner Program. Requisitos: 1k suscriptores y 4k horas de visualización (o 10M de vistas en Shorts).",
         icon: DollarSign,
         color: "text-amber-600",
         bg: "bg-amber-600/10"
-    },
-    {
-        term: "Sponsorships",
-        category: "monetization",
-        definition: "Patrocinios directos de marcas. Suelen pagar mucho más que los anuncios de AdSense en nichos específicos (Tech/Finanzas).",
-        icon: Target,
-        color: "text-primary",
-        bg: "bg-primary/10"
-    },
-    {
-        term: "Affiliate Marketing",
-        category: "monetization",
-        definition: "Ganar comisiones por ventas realizadas a través de tus enlaces (ej: Amazon Associates en la descripción).",
-        icon: ExternalLink,
-        color: "text-blue-400",
-        bg: "bg-blue-400/10"
-    },
-    {
-        term: "Super Thanks / Chats",
-        category: "monetization",
-        definition: "Propinas digitales que los fans envían para destacar sus comentarios o agradecer el valor aportado.",
-        icon: Heart,
-        color: "text-pink-600",
-        bg: "bg-pink-600/10"
-    },
-
-    // PRODUCTION / IA
-    {
-        term: "Hook (Gancho)",
-        category: "production",
-        definition: "Los primeros 3 segundos. Sin hook no hay retención; sin retención no hay views. Es la base de ViralTrends.",
-        icon: Wand2,
-        color: "text-purple-500",
-        bg: "bg-purple-500/10"
-    },
-    {
-        term: "B-roll",
-        category: "production",
-        definition: "Metraje secundario que ilustra lo que dices. Evita el 'aburrimiento visual' y mantiene al cerebro enganchado.",
-        icon: Video,
-        color: "text-indigo-500",
-        bg: "bg-indigo-500/10"
-    },
-    {
-        term: "Jump Cuts",
-        category: "production",
-        definition: "Edición sin pausas ni silencios. Esencial en videos cortos para maximizar la densidad de información.",
-        icon: PlayCircle,
-        color: "text-red-500",
-        bg: "bg-red-500/10"
-    },
-    {
-        term: "Prompt AI",
-        category: "production",
-        definition: "Instrucciones para IA. Un buen prompt genera guiones que parecen escritos por un director de cine de Hollywood.",
-        icon: MessageSquare,
-        color: "text-violet-500",
-        bg: "bg-violet-500/10"
-    },
-    {
-        term: "Text-to-Video",
-        category: "production",
-        definition: "Generación automática de imágenes o escenas a partir de guiones. Permite automatizar canales al 100%.",
-        icon: Cpu,
-        color: "text-cyan-600",
-        bg: "bg-cyan-600/10"
-    },
-
-    // NICHES / CULTURE
-    {
-        term: "Gaming (Outliers)",
-        category: "niches",
-        definition: "En gaming, los outliers suelen ser desafíos inesperados, bugs épicos o lanzamientos de juegos indie poco conocidos.",
-        icon: Gamepad2,
-        color: "text-green-500",
-        bg: "bg-green-500/10"
-    },
-    {
-        term: "Finanzas (High CPM)",
-        category: "niches",
-        definition: "Nicho de alto valor. Términos como ROI, Bull Market o Pasivos atraen anuncios premium que pagan hasta 10x más.",
-        icon: Coins,
-        color: "text-amber-500",
-        bg: "bg-amber-500/10"
-    },
-    {
-        term: "Lifestyle (GRWM / DITL)",
-        category: "niches",
-        definition: "Get Ready With Me / Day in the Life. Contenido que humaniza la marca y genera la máxima confianza con la audiencia.",
-        icon: Coffee,
-        color: "text-orange-500",
-        bg: "bg-orange-500/10"
-    },
-    {
-        term: "ASMR / Sensorial",
-        category: "niches",
-        definition: "Contenido enfocado en sonidos y estimulación visual. Altísima retención porque el usuario lo usa para relajarse.",
-        icon: Mic,
-        color: "text-emerald-400",
-        bg: "bg-emerald-400/10"
-    },
-    {
-        term: "Tech (Unboxing / Review)",
-        category: "niches",
-        definition: "Validación de gadgets. El usuario busca confirmación antes de comprar, lo que genera un 'intent' de compra muy alto.",
-        icon: Cpu,
-        color: "text-blue-500",
-        bg: "bg-blue-500/10"
-    },
-    {
-        term: "POV (Point of View)",
-        category: "niches",
-        definition: "Sumerge al espectador en una situación específica. Muy viral en TikTok para generar empatía o humor situacional.",
-        icon: Sparkles,
-        color: "text-purple-400",
-        bg: "bg-purple-400/10"
-    },
-    {
-        term: "Shadowban",
-        category: "niches",
-        definition: "Restricción invisible del alcance. Ocurre por reportes masivos o por intentar engañar al algoritmo con spam.",
-        icon: ShieldAlert,
-        color: "text-rose-600",
-        bg: "bg-rose-600/10"
-    },
-    {
-        term: "UGC (User Generated Content)",
-        category: "niches",
-        definition: "Contenido que parece grabado por un usuario normal, no por una marca. Es el formato de anuncio que mejor convierte hoy.",
-        icon: Users,
-        color: "text-indigo-400",
-        bg: "bg-indigo-400/10"
     }
 ];
 

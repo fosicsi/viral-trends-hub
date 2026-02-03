@@ -4,42 +4,42 @@ export interface ViralPackage {
     vibe: string;         // Ej: "Energético", "Misterioso", "Polémico"
     advice: string;       // El consejo clave (ej: "No hables, solo muestra la jugada")
   };
-  titles: string[];       
+  titles: string[];
   script: {
-    hook: string;         
-    body: string;         
-    cta: string;          
+    hook: string;
+    body: string;
+    cta: string;
   };
   seo: {
-    hashtags: string[];   
-    keywords: string[];   
+    hashtags: string[];
+    keywords: string[];
   };
   prompts: {
-    image: string;        
-    videoStart: string;   
-    videoEnd: string;     
-    music: string;        
+    image: string;
+    videoStart: string;
+    videoEnd: string;
+    music: string;
   };
 }
 
 export async function generateViralScript(
-  videoTitle: string, 
-  channelName: string, 
+  videoTitle: string,
+  channelName: string,
   apiKey: string
 ): Promise<ViralPackage | { error: string }> {
-  
+
   const cleanKey = apiKey.trim();
   if (!cleanKey) return { error: "Falta la API Key de Google Gemini." };
 
   // 1. Detección de modelo (Código robusto que ya teníamos)
-  let selectedModel = "gemini-1.5-flash"; 
+  let selectedModel = "gemini-1.5-flash";
   try {
     const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${cleanKey}`;
     const listResponse = await fetch(listUrl);
     if (listResponse.ok) {
-        const listData = await listResponse.json();
-        const validModel = listData.models?.find((m: any) => m.supportedGenerationMethods?.includes("generateContent") && m.name.includes("gemini"));
-        if (validModel) selectedModel = validModel.name.replace("models/", "");
+      const listData = await listResponse.json();
+      const validModel = listData.models?.find((m: any) => m.supportedGenerationMethods?.includes("generateContent") && m.name.includes("gemini"));
+      if (validModel) selectedModel = validModel.name.replace("models/", "");
     }
   } catch (e) { console.warn("Fallo lista modelos, usando default"); }
 
@@ -53,7 +53,9 @@ export async function generateViralScript(
        - Si es curiosidades/geo: "Voz en off con mapas 3D".
        - Si es humor: "Sketch POV".
     
-    2. GENERA EL PAQUETE:
+    2. GENERA EL PAQUETE (IMPORTANTE: RESPONDER EN ESPAÑOL):
+    Salvo los campos dentro de "prompts" (que deben ser en inglés), todo el resto del contenido (títulos, guion, estrategia) DEBE ser en ESPAÑOL.
+    
     Responde ÚNICAMENTE con este JSON:
     {
       "strategy": {
@@ -61,13 +63,16 @@ export async function generateViralScript(
         "vibe": "Atmósfera del video (Ej: Eufórico, Educativo, Chill)",
         "advice": "Consejo de edición específico (Ej: Pon el video original abajo y tu cara arriba reaccionando en silencio)"
       },
-      "titles": ["Título 1", "Título 2", "Título 3"],
+      "titles": ["Título 1 (Gancho fuerte)", "Título 2 (Curiosidad)", "Título 3 (Polémico)"],
       "script": { 
          "hook": "Lo que se dice o el texto en pantalla (0-3s)", 
          "body": "Lo que ocurre o se narra", 
          "cta": "Cierre" 
       },
-      "seo": { "hashtags": ["#..."], "keywords": ["..."] },
+      "seo": { 
+        "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"], 
+        "keywords": ["keyword1", "keyword2", "keyword3", "keyword4"] 
+      },
       "prompts": { 
         "image": "Prompt Midjourney Thumbnail (English)",
         "videoStart": "Prompt Runway Intro (English)",

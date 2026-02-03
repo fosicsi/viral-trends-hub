@@ -895,8 +895,36 @@ export default function ViralApp() {
                               <div><span className="text-[10px] font-black uppercase text-muted-foreground">Cuerpo</span><p className="text-sm text-muted-foreground mt-1">{viralPackage.script.body}</p></div>
                             </div>
                           </TabsContent>
-                          <TabsContent value="metadata" className="space-y-4">
-                            <div className="space-y-2"><p className="text-xs font-bold uppercase text-muted-foreground">Títulos</p>{viralPackage.titles.map((t, i) => (<div key={i} className="p-3 bg-card border rounded-xl text-sm">{t}</div>))}</div>
+                          <TabsContent value="metadata" className="space-y-6">
+                            <div className="space-y-2">
+                              <p className="text-xs font-bold uppercase text-muted-foreground">Títulos Virales</p>
+                              <div className="space-y-2">
+                                {viralPackage.titles.map((t, i) => (
+                                  <div key={i} className="group relative p-3 bg-card border border-border rounded-xl text-sm hover:bg-surface transition-colors cursor-pointer" onClick={() => copyToClipboard(t, `title-${i}`)}>
+                                    {t}
+                                    <span id={`title-${i}`} className="absolute right-2 top-2 text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">Copiar</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <p className="text-xs font-bold uppercase text-muted-foreground">Hashtags</p>
+                              <div className="flex flex-wrap gap-2">
+                                {viralPackage.seo?.hashtags?.map((tag, i) => (
+                                  <div key={i} onClick={() => copyToClipboard(tag, `hash-${i}`)} className="cursor-pointer px-2.5 py-1 rounded-md bg-secondary text-secondary-foreground hover:bg-primary/10 hover:text-primary text-xs font-medium transition-colors">
+                                    {tag}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <p className="text-xs font-bold uppercase text-muted-foreground">Keywords SEO</p>
+                              <div className="p-3 bg-card border border-border rounded-xl text-xs text-muted-foreground font-mono leading-relaxed select-all">
+                                {viralPackage.seo?.keywords?.join(", ")}
+                              </div>
+                            </div>
                           </TabsContent>
                           <TabsContent value="prompts" className="space-y-4">
                             <div className="space-y-1"><p className="text-xs font-bold uppercase text-muted-foreground">Midjourney</p><div className="p-3 bg-card border rounded-xl text-[10px] font-mono select-all">/imagine {viralPackage.prompts.image}</div></div>

@@ -18,17 +18,19 @@ export function ViralSearchHeader({ query, onChangeQuery, onSearch, filters, onO
       <div className="flex items-end justify-between gap-4">
         <div>
           <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">Buscador Viral</h2>
-          <p className="text-muted-foreground mt-1">Escribe un nicho y filtra por señales de oportunidad.</p>
+          <p className="text-muted-foreground mt-1">
+            Encuentra videos outliers y oportunidades de nicho.
+          </p>
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-3">
+      <div className="flex gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
           <Input
             value={query}
             onChange={(e) => onChangeQuery(e.target.value)}
-            placeholder="Busca un nicho o hashtag (ej: #recetas, #futbol)..."
+            placeholder="Busca un nicho (ej: #recetas, #futbol)..."
             className="h-12 rounded-2xl pl-11 bg-surface border-border"
             onKeyDown={(e) => {
               if (e.key === "Enter") onSearch();

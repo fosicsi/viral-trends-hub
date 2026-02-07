@@ -1,4 +1,6 @@
-// supabase/functions/youtube-search/index.ts
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { crypto } from "https://deno.land/std@0.208.0/crypto/mod.ts";
+import { decodeHex } from "https://deno.land/std@0.208.0/encoding/hex.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,6 +8,70 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+// --- AUTH & CRYPTO HELPERS ---
+
+async function getMainKey(secret: string): Promise<CryptoKey> {
+  const encoder = new TextEncoder();
+  const keyBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(secret));
+  return await crypto.subtle.importKey(
+    "raw",
+    keyBuffer,
+    { name: "AES-GCM" },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+async function decrypt(hexStr: string, secret: string): Promise<string> {
+  const data = decodeHex(hexStr);
+  const iv = data.slice(0, 12);
+  const ciphertext = data.slice(12);
+  const key = await getMainKey(secret);
+
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: iv },
+    key,
+    ciphertext
+  );
+  return new TextDecoder().decode(decrypted);
+}
+
+async function getUserGoogleToken(req: Request): Promise<string | null> {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) return null;
+
+  try {
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    if (userError || !user) return null;
+
+    const { data: integration, error: dbError } = await supabaseAdmin
+      .from('user_integrations')
+      .select('access_token')
+      .eq('user_id', user.id)
+      .eq('platform', 'google')
+      .maybeSingle();
+
+    if (dbError || !integration) return null;
+
+    const encryptionKey = Deno.env.get("OAUTH_ENCRYPTION_KEY") || "default-insecure-key";
+    return await decrypt(integration.access_token, encryptionKey);
+  } catch (e) {
+    console.error("Error fetching user token:", e);
+    return null;
+  }
+}
 
 type ViralFilters = {
   minViews: number;
@@ -41,15 +107,15 @@ function toSafeNumber(v: unknown, fallback: number): number {
 function normalizeFilters(input: any): ViralFilters {
   const minViews = Math.max(0, Math.floor(toSafeNumber(input?.minViews, 10_000)));
   const maxSubs = Math.max(0, Math.floor(toSafeNumber(input?.maxSubs, 500_000)));
-  
+
   const date: ViralFilters["date"] =
     ["week", "month", "year", "all"].includes(input?.date) ? input.date : "year";
 
   // Forzamos "short" internamente si la app es de Shorts, o lo dejamos dinámico
-  const type: ViralFilters["type"] = "short"; 
-  
+  const type: ViralFilters["type"] = "short";
+
   const orderInput = input?.order;
-  const order: ViralFilters["order"] = 
+  const order: ViralFilters["order"] =
     ["date", "rating", "relevance", "viewCount"].includes(orderInput) ? orderInput : "viewCount";
 
   return { minViews, maxSubs, date, type, order };
@@ -84,9 +150,16 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const apiKey = Deno.env.get("YOUTUBE_API_KEY");
+    // Priority: User's OAuth Token > Server Key
+    const userToken = await getUserGoogleToken(req);
+    const serverKey = Deno.env.get("YOUTUBE_API_KEY");
+
+    // We use Bearer for OAuth tokens and ?key= for API keys
+    const useOAuth = !!userToken;
+    const apiKey = userToken || serverKey;
+
     if (!apiKey) {
-      throw new Error("Missing YOUTUBE_API_KEY");
+      throw new Error("No YouTube API credentials found (neither user token nor server key)");
     }
 
     const body = await req.json().catch(() => ({}));
@@ -100,19 +173,22 @@ Deno.serve(async (req) => {
 
     // 2. Función "Cazadora": Busca, descarga detalles y filtra
     const fetchAndFilter = async (orderBy: string): Promise<InternalVideoItem[]> => {
-      console.log(`🔎 Buscando: "${query}" | Orden: ${orderBy}`);
-      
+      console.log(`🔎 Buscando: "${query}" | Orden: ${orderBy} | OAuth: ${useOAuth}`);
+
+      const authQuery = useOAuth ? "" : `&key=${apiKey}`;
+      const authHeader: HeadersInit = useOAuth ? { "Authorization": `Bearer ${apiKey}` } : {};
+
       // A. Buscar IDs (Search List)
       const searchUrl =
         `https://www.googleapis.com/youtube/v3/search?part=snippet` +
         `&q=${encodeURIComponent(query)}` +
         `&type=video&maxResults=50` + // Pedimos el máximo posible
         `&order=${encodeURIComponent(orderBy)}` +
-        `${durationParam}${dateParam}&key=${apiKey}`;
+        `${durationParam}${dateParam}${authQuery}`;
 
-      const sRes = await fetch(searchUrl);
+      const sRes = await fetch(searchUrl, { headers: authHeader });
       const sData = await sRes.json();
-      
+
       if (!sRes.ok) {
         console.error("Error search API:", sData);
         return [];
@@ -124,7 +200,8 @@ Deno.serve(async (req) => {
       // B. Obtener Estadísticas (Videos List)
       const vIds = items.map((i) => i?.id?.videoId).filter(Boolean).join(",");
       const vRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics,snippet&id=${encodeURIComponent(vIds)}&key=${apiKey}`
+        `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics,snippet&id=${encodeURIComponent(vIds)}${authQuery}`,
+        { headers: authHeader }
       );
       const vData = await vRes.json();
       const vItems: any[] = Array.isArray(vData?.items) ? vData.items : [];
@@ -132,10 +209,11 @@ Deno.serve(async (req) => {
       // C. Obtener Suscriptores (Channels List)
       const channelIds = [...new Set(vItems.map((v) => v?.snippet?.channelId).filter(Boolean))].join(",");
       const cRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${encodeURIComponent(channelIds)}&key=${apiKey}`
+        `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${encodeURIComponent(channelIds)}${authQuery}`,
+        { headers: authHeader }
       );
       const cData = await cRes.json();
-      
+
       // Mapa rápido de ID -> Stats
       const cStats: Record<string, any> = {};
       (Array.isArray(cData?.items) ? cData.items : []).forEach((c: any) => {
@@ -148,12 +226,12 @@ Deno.serve(async (req) => {
           const views = Number(v?.statistics?.viewCount || 0);
           const channelId = v?.snippet?.channelId;
           const subs = Number(cStats[channelId]?.subscriberCount || 0);
-          
+
           // Si subs es 0 (oculto), estimamos algo conservador para no romper el ratio
           const safeSubs = subs > 0 ? subs : Math.max(1, Math.floor(views / 100));
 
           const durSeconds = parseDuration(String(v?.contentDetails?.duration || "PT0S"));
-          
+
           return {
             id: String(v?.id),
             title: String(v?.snippet?.title || ""),
@@ -171,10 +249,10 @@ Deno.serve(async (req) => {
         .filter((v) => v.thumbnail && v.title)
         .filter((v) => v._durSeconds <= 60) // Filtro duro de 60s
         .filter((v) => {
-            // EL GRAN FILTRO: Aquí es donde mueren los canales grandes
-            const passViews = v.views >= filters.minViews;
-            const passSubs = v.channelSubscribers <= filters.maxSubs;
-            return passViews && passSubs;
+          // EL GRAN FILTRO: Aquí es donde mueren los canales grandes
+          const passViews = v.views >= filters.minViews;
+          const passSubs = v.channelSubscribers <= filters.maxSubs;
+          return passViews && passSubs;
         });
     };
 
@@ -188,7 +266,7 @@ Deno.serve(async (req) => {
     if (finalResults.length < 5 && filters.order !== "relevance") {
       console.log("⚠️ Pocos resultados, activando búsqueda de respaldo (Relevance)...");
       const fallbackResults = await fetchAndFilter("relevance");
-      
+
       // Fusionamos sin duplicados
       const existingIds = new Set(finalResults.map(v => v.id));
       const novelties = fallbackResults.filter(v => !existingIds.has(v.id));

@@ -5,12 +5,13 @@ import { ViralSearchHeader } from "./components/ViralSearchHeader";
 import { ViralVideoCard } from "./components/ViralVideoCard";
 import { NicheInsightsBar } from "./components/NicheInsightsBar";
 import { ViralFiltersDialog } from "./components/ViralFiltersDialog";
-import { ViralSettingsDialog } from "./components/ViralSettingsDialog";
 import { ViralSavedView } from "./components/ViralSavedView";
 import { ViralToolsView } from "./components/ViralToolsView";
 import { ViralSortControl, type SortOption } from "./components/ViralSortControl";
 import { ViralGlossaryView } from "./components/ViralGlossaryView";
 import type { ViralFilters, VideoItem } from "./types";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -34,11 +35,28 @@ const VIRAL_TOPICS = [
 ];
 
 export default function ViralApp() {
+  const navigate = useNavigate();
+  const [session, setSession] = React.useState<any>(null);
   const [view, setView] = React.useState<ViralView>("home");
   const [query, setQuery] = React.useState<string>("");
   const [selected, setSelected] = React.useState<VideoItem | null>(null);
 
-  const [showSettings, setShowSettings] = React.useState(false);
+  React.useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session && view === "home") setView("viral");
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session && view === "home") setView("viral");
+    });
+
+    return () => subscription.unsubscribe();
+  }, [view]);
+
   const [showFilters, setShowFilters] = React.useState(false);
   const [liveResults, setLiveResults] = React.useState<VideoItem[]>([]);
   const [sortBy, setSortBy] = React.useState<SortOption>("views");
@@ -97,6 +115,13 @@ export default function ViralApp() {
     if (isDark) document.documentElement.classList.add("dark");
     else document.documentElement.classList.remove("dark");
   }, [isDark]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+    setView("home");
+    navigate("/");
+  };
 
   // --- PARTICLES (ESTABILIZADO: INTERACTIVIDAD OFF) ---
   const [init, setInit] = useState(false);
@@ -162,17 +187,20 @@ export default function ViralApp() {
 
   const handleGenerateScript = async () => {
     if (!selected) return;
-    const apiKey = localStorage.getItem("gemini_api_key");
-    if (!apiKey) {
-      alert("⚠️ Falta la API Key de Gemini. Configúrala en el botón de Ajustes (⚙️).");
-      setShowSettings(true);
-      return;
-    }
+
     setScriptLoading(true);
     try {
-      const res = await generateViralScript(selected.title, selected.channelTitle, apiKey);
-      if ("error" in res) alert("Error: " + res.error);
-      else setViralPackage(res);
+      const res = await generateViralScript(selected.title, selected.channelTitle);
+      if ("error" in res) {
+        if (res.error?.includes("401") || res.error?.includes("account")) {
+          alert("⚠️ Conecta tu cuenta de Google en Integraciones para usar esta función.");
+          navigate("/integrations");
+        } else {
+          alert("Error: " + res.error);
+        }
+      } else {
+        setViralPackage(res);
+      }
     } catch (e) {
       alert("Error al generar el paquete viral.");
     } finally {
@@ -271,7 +299,11 @@ export default function ViralApp() {
   };
 
   const runViralSearch = (topic?: string) => { const q = topic || viralInput || viralTopic; handleSearchGeneric(q, viralFilters, true); };
-  const handleSearch = () => handleSearchGeneric(query, filters, false);
+
+  const handleSearch = async () => {
+    handleSearchGeneric(query, filters, false);
+  };
+
   const handleTagClick = (tag: string) => { setQuery(tag); setView("videos"); handleSearchGeneric(tag, filters, false); };
 
   React.useEffect(() => {
@@ -328,7 +360,16 @@ export default function ViralApp() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground transition-colors duration-300 font-sans">
-      <ViralSidebar view={view} onChangeView={setView} onOpenSettings={() => setShowSettings(true)} isDark={isDark} onToggleTheme={toggleTheme} />
+      {view !== "home" && (
+        <ViralSidebar
+          view={view}
+          onChangeView={setView}
+          isDark={isDark}
+          onToggleTheme={toggleTheme}
+          user={session?.user}
+          onLogout={handleLogout}
+        />
+      )}
 
       <div className="flex-1 min-w-0 flex flex-col relative overflow-hidden">
         {view !== "home" && <ViralTopbar view={view} />}
@@ -346,13 +387,18 @@ export default function ViralApp() {
                     ViralTrends<span className="text-primary">.ai</span>
                   </motion.div>
                   <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600 dark:text-slate-400">
-                    {["Funcionalidades", "Precios", "Consultoría", "Casos de Éxito"].map((item, i) => (
-                      <motion.a key={item} href="#" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="hover:text-primary transition-colors relative group">{item}<span className="absolute left-0 -bottom-1 w-0 h-0.5 bg-primary transition-all group-hover:w-full"></span></motion.a>
+                    {[
+                      { label: "Funcionalidades", href: "#features" },
+                      { label: "Precios", href: "#pricing" },
+                      { label: "Consultoría", href: "#consultancy" },
+                      { label: "Casos de Éxito", href: "#success-stories" }
+                    ].map((item, i) => (
+                      <motion.a key={item.label} href={item.href} initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="hover:text-primary transition-colors relative group">{item.label}<span className="absolute left-0 -bottom-1 w-0 h-0.5 bg-primary transition-all group-hover:w-full"></span></motion.a>
                     ))}
                   </nav>
                   <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-4">
-                    <Button variant="ghost" className="hidden sm:flex hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => setShowSettings(true)}>Log in</Button>
-                    <Button className="rounded-full px-6 font-bold shadow-lg shadow-primary/30 hover:shadow-primary/50 transition-all hover:scale-105" onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}>Comprar <ArrowRight className="w-4 h-4 ml-2" /></Button>
+                    <Button variant="ghost" className="hidden sm:flex hover:bg-slate-100 dark:hover:bg-slate-800 font-bold tracking-wider" onClick={() => navigate("/auth")}>LOGIN</Button>
+                    <Button className="rounded-full px-6 font-bold shadow-lg shadow-primary/30 hover:shadow-primary/50 transition-all hover:scale-105 tracking-wider" onClick={() => navigate("/auth")}>REGISTRARSE <ArrowRight className="w-4 h-4 ml-2" /></Button>
                   </motion.div>
                 </div>
               </header>
@@ -428,18 +474,11 @@ export default function ViralApp() {
                   </motion.div>
 
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.7 }} className="flex flex-col sm:flex-row gap-5 justify-center pt-8">
-                    <Button size="xl" className="h-16 rounded-2xl px-12 text-xl font-bold shadow-2xl shadow-primary/40 hover:shadow-primary/60 hover:scale-105 transition-all relative overflow-hidden group" onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}>
+                    <Button size="xl" className="h-16 rounded-2xl px-12 text-xl font-bold shadow-2xl shadow-primary/40 hover:shadow-primary/60 hover:scale-105 transition-all relative overflow-hidden group" onClick={() => navigate("/auth")}>
                       <div className="absolute inset-0 bg-white/20 group-hover:translate-x-full transition-transform duration-500 skew-x-12 -z-10"></div>
-                      Obtener Acceso de Por Vida
-                    </Button>
-                    <Button size="xl" variant="outline" className="h-16 rounded-2xl px-12 text-xl font-bold bg-white/70 dark:bg-slate-900/70 backdrop-blur-lg border-slate-300 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-900 hover:scale-105 transition-all group" onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}>
-                      <MousePointer2 className="w-6 h-6 mr-3 text-slate-500 group-hover:text-primary transition-colors" /> Ver Cómo Funciona
+                      Comenzar Ahora
                     </Button>
                   </motion.div>
-
-                  <div className="pt-4">
-                    <button onClick={() => setView("videos")} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors underline decoration-dotted opacity-50 hover:opacity-100">Ir al Buscador (Admin)</button>
-                  </div>
 
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="pt-10 flex items-center justify-center gap-6 text-sm text-slate-500 dark:text-slate-400 font-medium">
                     <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-500" /> Sin mensualidades</span>
@@ -462,7 +501,7 @@ export default function ViralApp() {
               </section>
 
               {/* SECTION: BENTO GRID FEATURES (Inspirado en Linear) */}
-              <section className="py-24 px-6 bg-white dark:bg-slate-950">
+              <section id="features" className="py-24 px-6 bg-white dark:bg-slate-950">
                 <div className="container mx-auto max-w-7xl">
                   <div className="text-center mb-16 space-y-4">
                     <h2 className="text-4xl md:text-5xl font-black tracking-tight">Potencia tus decisiones con Data Viral.</h2>
@@ -677,7 +716,7 @@ export default function ViralApp() {
               </section>
 
               {/* SUCCESS STORY - PREMIUM REBRANDING */}
-              <section className="py-40 bg-slate-900 text-white relative overflow-hidden">
+              <section id="success-stories" className="py-40 bg-slate-900 text-white relative overflow-hidden">
                 <div className="absolute inset-0 bg-grid-white/[0.02] bg-[length:40px_40px] pointer-events-none" />
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/10 blur-[150px] rounded-full pointer-events-none" />
 
@@ -728,6 +767,72 @@ export default function ViralApp() {
                 </div>
               </section>
 
+              {/* SECTION: CONSULTANCY (NUEVO) */}
+              <section id="consultancy" className="py-32 px-6 bg-slate-50 dark:bg-slate-900/30 border-y border-slate-200 dark:border-slate-800 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-1/3 h-full bg-primary/5 blur-[120px] rounded-full pointer-events-none"></div>
+                <div className="container mx-auto max-w-6xl">
+                  <div className="grid lg:grid-cols-2 gap-16 items-center">
+                    <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
+                      <Badge className="bg-primary/10 text-primary border-primary/20 mb-6">Servicio Exclusivo</Badge>
+                      <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-6">Consultoría Estratégica para Creadores.</h2>
+                      <p className="text-xl text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
+                        No solo te damos los datos. Te ayudamos a interpretarlos y a construir un sistema de producción que escale tu audiencia de forma predecible.
+                      </p>
+                      <ul className="space-y-4 mb-10">
+                        {[
+                          "Auditoría profunda de nicho y competencia.",
+                          "Optimización de retención basada en psicología viral.",
+                          "Implementación de flujos de trabajo con IA (Scripts + Edición)."
+                        ].map((text, i) => (
+                          <li key={i} className="flex items-center gap-3 font-bold text-slate-800 dark:text-slate-200">
+                            <CheckCircle2 className="w-6 h-6 text-primary flex-shrink-0" /> {text}
+                          </li>
+                        ))}
+                      </ul>
+                      <Button size="xl" variant="outline" className="rounded-2xl border-primary text-primary hover:bg-primary/10 font-bold" onClick={() => window.open('mailto:hola@viraltrends.ai')}>Reservar Sesión de Estrategia</Button>
+                    </motion.div>
+
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      whileInView={{ opacity: 1, scale: 1 }}
+                      viewport={{ once: true }}
+                      className="bg-white dark:bg-slate-950 p-8 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-2xl relative"
+                    >
+                      <div className="absolute -top-4 -right-4 bg-primary text-white p-4 rounded-2xl shadow-xl rotate-12">
+                        <Star className="w-6 h-6 fill-current" />
+                      </div>
+                      <h4 className="font-black text-xl mb-6">Plan de Acción 90 Días</h4>
+                      <div className="space-y-6">
+                        {[
+                          { step: "01", title: "Análisis de Datos", desc: "Identificamos tus 'Outliers' históricos.", status: "Done" },
+                          { step: "02", title: "Diseño de Formato", desc: "Creamos un estilo visual único y optimizado.", status: "In Progress" },
+                          { step: "03", title: "Escalado Viral", desc: "Producción masiva apoyada en nuestra IA.", status: "Next" }
+                        ].map((item, i) => (
+                          <div key={i} className="flex gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-black text-primary shrink-0">{item.step}</div>
+                            <div>
+                              <h5 className="font-bold text-sm">{item.title}</h5>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">{item.desc}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Disponibilidad</p>
+                          <p className="text-sm font-bold text-green-500">2 Cupos para Marzo</p>
+                        </div>
+                        <div className="flex -space-x-3">
+                          {[1, 2, 3].map(i => (
+                            <div key={i} className="w-8 h-8 rounded-full border-2 border-white dark:border-slate-950 bg-slate-200 dark:bg-slate-800"></div>
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  </div>
+                </div>
+              </section>
+
               {/* PRICING SECTION - MODERN CARDS */}
               <section id="pricing" className="py-40 px-6 bg-white dark:bg-slate-950">
                 <div className="container mx-auto max-w-6xl">
@@ -736,19 +841,8 @@ export default function ViralApp() {
                     <p className="text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto font-medium">Una inversión única para dominar el algoritmo para siempre.</p>
                   </div>
 
-                  <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-                    <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="p-12 rounded-[40px] border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 shadow-sm flex flex-col items-center text-center">
-                      <h3 className="font-black text-2xl mb-2">Free Start</h3>
-                      <p className="text-sm text-slate-500 mb-8 font-bold uppercase tracking-widest">Para probar el poder</p>
-                      <div className="text-6xl font-black mb-10">$0</div>
-                      <ul className="space-y-4 mb-10 text-sm font-bold text-slate-600 dark:text-slate-400">
-                        <li className="flex items-center gap-2">10 Búsquedas Diarias</li>
-                        <li className="flex items-center gap-2">Reportes Básicos</li>
-                      </ul>
-                      <Button variant="outline" size="xl" className="w-full rounded-2xl h-16 font-bold text-lg border-2 hover:bg-white dark:hover:bg-slate-800" onClick={() => setView("viral")}>Probar Gratis</Button>
-                    </motion.div>
-
-                    <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="p-12 rounded-[40px] border-4 border-primary bg-white dark:bg-slate-900 shadow-3xl shadow-primary/20 flex flex-col items-center text-center relative overflow-hidden scale-105 z-10">
+                  <div className="flex justify-center max-w-xl mx-auto">
+                    <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} className="p-12 rounded-[40px] border-4 border-primary bg-white dark:bg-slate-900 shadow-3xl shadow-primary/20 flex flex-col items-center text-center relative overflow-hidden z-10">
                       <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-3xl rounded-full"></div>
                       <div className="absolute -top-6 inset-x-0 flex justify-center">
                         <div className="bg-primary text-white text-xs font-black px-6 py-2 rounded-full shadow-xl uppercase tracking-widest">Oferta Lifetime</div>
@@ -761,7 +855,7 @@ export default function ViralApp() {
                         <li className="flex items-center gap-2"><Check className="w-5 h-5 text-primary" /> IA Studio Full (Scripts+Prompts)</li>
                         <li className="flex items-center gap-2"><Check className="w-5 h-5 text-primary" /> Soporte VIP</li>
                       </ul>
-                      <Button size="xl" className="w-full rounded-2xl h-16 font-black text-xl shadow-2xl shadow-primary/30 hover:shadow-primary/50 hover:scale-105 transition-all bg-primary">Comprar Ahora</Button>
+                      <Button size="xl" className="w-full rounded-2xl h-16 font-black text-xl shadow-2xl shadow-primary/30 hover:shadow-primary/50 hover:scale-105 transition-all bg-primary" onClick={() => navigate("/auth")}>Comprar Ahora</Button>
                     </motion.div>
                   </div>
                 </div>
@@ -791,18 +885,48 @@ export default function ViralApp() {
 
           {view === "videos" && (
             <section className="max-w-7xl mx-auto px-6 md:px-10 py-10 space-y-8 animate-in fade-in">
-              <ViralSearchHeader query={query} onChangeQuery={setQuery} onSearch={handleSearch} filters={filters} onOpenFilters={() => setShowFilters(true)} />
+              <ViralSearchHeader
+                query={query}
+                onChangeQuery={setQuery}
+                onSearch={handleSearch}
+                filters={filters}
+                onOpenFilters={() => setShowFilters(true)}
+              />
+
               {!loading && liveResults.length > 0 && (<> <ViralSortControl value={sortBy} onChange={setSortBy} /> <NicheInsightsBar items={liveResults} onKeywordClick={handleTagClick} /> </>)}
 
-              {!loading && hasSearched && liveResults.length === 0 && <EmptyState onRetry={() => setShowFilters(true)} />}
+              {loading && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-[360px] rounded-[20px] border border-border bg-card/40 animate-pulse" />)}
+                </div>
+              )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {loading && Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-[360px] rounded-[20px] border border-border bg-card/40 animate-pulse" />)}
-                {!loading && sortedLiveResults.map((v) => <ViralVideoCard key={v.id} video={v} onOpen={setSelected} saved={isSaved(v.id)} onToggleSave={toggleSaved} onTagClick={handleTagClick} />)}
-              </div>
+              {error && (
+                <div className="rounded-2xl bg-red-500/10 border border-red-500/20 p-4 flex items-center gap-3 text-red-500 animate-in slide-in-from-top-2">
+                  <AlertCircle className="w-5 h-5 shrink-0" />
+                  <p className="font-bold text-sm">{error}</p>
+                  <Button variant="ghost" size="sm" className="ml-auto hover:bg-red-500/10" onClick={() => setError(null)}><X className="w-4 h-4" /></Button>
+                </div>
+              )}
+
+              {!loading && !error && hasSearched && liveResults.length === 0 && <EmptyState onRetry={() => setShowFilters(true)} />}
+
+              {!loading && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {sortedLiveResults.map((item) => (
+                    <ViralVideoCard
+                      key={item.id}
+                      video={item}
+                      onOpen={() => setSelected(item)}
+                      saved={isSaved(item.id)}
+                      onToggleSave={toggleSaved}
+                      onTagClick={handleTagClick}
+                    />
+                  ))}
+                </div>
+              )}
             </section>
           )}
-
           {(view === "viral" || view === "saved" || view === "tools" || view === "glossary") && (
             <section className="max-w-6xl mx-auto px-6 md:px-10 py-16 animate-in fade-in">
               {view === "viral" ? (
@@ -840,11 +964,12 @@ export default function ViralApp() {
               ) : view === "glossary" ? (
                 <ViralGlossaryView />
               ) : (
-                <ViralToolsView onOpenApiKey={() => setShowSettings(true)} onOpenSearchFilters={() => setShowFilters(true)} onOpenExplorerFilters={() => setShowViralFilters(true)} onGoSearch={() => setView("videos")} onExportSaved={() => { }} savedCount={saved.length} />
+                <ViralToolsView onOpenApiKey={() => navigate("/integrations")} onOpenSearchFilters={() => setShowFilters(true)} onOpenExplorerFilters={() => setShowViralFilters(true)} onGoSearch={() => setView("videos")} onExportSaved={() => { }} savedCount={saved.length} />
               )}
             </section>
-          )}
-        </main>
+          )
+          }
+        </main >
 
         {/* --- MODAL DETALLE VIDEO --- */}
         {
@@ -986,7 +1111,7 @@ export default function ViralApp() {
 
         <ViralFiltersDialog open={showFilters} onOpenChange={setShowFilters} value={filters} onApply={(newFilters) => { setFilters(newFilters); if (view === "videos") handleSearchGeneric(query, newFilters, false); }} />
         <ViralFiltersDialog open={showViralFilters} onOpenChange={setShowViralFilters} value={viralFilters} onApply={(newFilters) => { setViralFilters(newFilters); const topicToSearch = viralTopic || viralInput; handleSearchGeneric(topicToSearch, newFilters, true); }} />
-        <ViralSettingsDialog open={showSettings} onOpenChange={setShowSettings} isDark={isDark} onToggleTheme={toggleTheme} />
-      </div></div>
+
+      </div ></div >
   );
 }

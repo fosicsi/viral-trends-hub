@@ -20,3 +20,12 @@ export type ViralFilters = {
   type: "all" | "short" | "medium" | "long" | "video"; // Added video
   order: "viewCount" | "date" | "relevance"; // Added relevance
 };
+
+export type ViralHashtag = {
+  id: string;
+  name: string;
+  views: number;
+  growth: number;
+  shortsCount: number;
+  postsCount: number;
+};

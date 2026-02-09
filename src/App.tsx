@@ -8,6 +8,9 @@ import NotFound from "./pages/NotFound";
 import IntegrationsPage from "./features/integrations/IntegrationsPage";
 import OAuthCallback from "./pages/auth/OAuthCallback";
 import AuthPage from "./pages/Auth";
+import AnalyticsLayout from "./features/analytics/layout/AnalyticsLayout";
+import AnalyticsDashboard from "./features/analytics/pages/AnalyticsDashboard";
+import AnalyticsSettings from "./features/analytics/pages/AnalyticsSettings";
 
 const queryClient = new QueryClient();
 
@@ -22,6 +25,11 @@ const App = () => (
           <Route path="/integrations" element={<IntegrationsPage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/auth/callback" element={<OAuthCallback />} />
+          <Route path="/analytics" element={<AnalyticsLayout />}>
+            <Route index element={<AnalyticsDashboard />} />
+            <Route path="settings" element={<AnalyticsSettings />} />
+            {/* Future sub-routes can be added here */}
+          </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

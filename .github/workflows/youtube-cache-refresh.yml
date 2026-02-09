@@ -1,0 +1,32 @@
+name: YouTube Analytics Cache Refresh
+
+on:
+  schedule:
+    # Stats: Every 15 minutes
+    - cron: '*/15 * * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  refresh-stats:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refresh YouTube Stats Cache
+        run: |
+          curl -X POST \
+            'https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/youtube-analytics-collector' \
+            -H 'Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}' \
+            -H 'Content-Type: application/json' \
+            -d '{"dataType":"stats"}'
+  
+  refresh-reports:
+    runs-on: ubuntu-latest
+    # Run only every 30 minutes (at :00 and :30)
+    if: github.event.schedule == '0,30 * * * *' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Refresh YouTube Reports Cache
+        run: |
+          curl -X POST \
+            'https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/youtube-analytics-collector' \
+            -H 'Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}' \
+            -H 'Content-Type: application/json' \
+            -d '{"dataType":"reports","dateRanges":["7d","28d","90d","365d"]}'

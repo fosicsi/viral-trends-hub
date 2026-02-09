@@ -8,12 +8,39 @@ export default function AnalyticsLayout() {
     const navigate = useNavigate();
     const [theme, setTheme] = useState('light');
     const [user, setUser] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
-            setUser(session?.user);
+            if (!session) {
+                // No session - redirect to auth
+                navigate('/auth', { replace: true });
+            } else {
+                setUser(session.user);
+            }
+            setLoading(false);
         });
-    }, []);
+
+        // Listen for auth changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_OUT' || !session) {
+                navigate('/auth', { replace: true });
+            } else {
+                setUser(session.user);
+            }
+        });
+
+        return () => subscription.unsubscribe();
+    }, [navigate]);
+
+    // Show loading while checking auth
+    if (loading) {
+        return (
+            <div className="flex h-screen items-center justify-center bg-background">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+        );
+    }
 
     const toggleTheme = () => {
         const newTheme = theme === 'dark' ? 'light' : 'dark';

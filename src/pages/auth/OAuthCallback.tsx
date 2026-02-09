@@ -36,12 +36,19 @@ export default function OAuthCallback() {
                 await integrationsApi.exchangeCode(code, platform);
 
                 toast.success(`Successfully connected to ${platform}!`);
-                navigate("/integrations");
-            } catch (err) {
+
+                if (platform === 'youtube' || platform === 'google') {
+                    console.log("Redirecting to analytics...");
+                    navigate("/analytics", { replace: true });
+                } else {
+                    navigate("/integrations", { replace: true });
+                }
+            } catch (err: any) {
                 console.error(err);
-                toast.error("Failed to connect account. Please try again.");
-                setStatus("Error occurred."); // stay on page to show error if needed, or redirect
-                setTimeout(() => navigate("/integrations"), 2000);
+                const errorMessage = err.message || "Failed to connect account";
+                toast.error(errorMessage);
+                // Status updated to error, do NOT redirect automatically so user sees the issue
+                setStatus(`Error: ${errorMessage}. Please try again.`);
             }
         };
 

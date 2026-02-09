@@ -3,3 +3,6 @@ verify_jwt = false
 
 [functions.ai-viral-topics]
 verify_jwt = false
+
+[functions.channel-integration]
+verify_jwt = false

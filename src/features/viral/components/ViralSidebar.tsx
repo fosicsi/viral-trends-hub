@@ -7,7 +7,8 @@ import {
   Bookmark,
   HelpCircle,
   LogOut,
-  User
+  User,
+  LayoutDashboard
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,8 @@ interface ViralSidebarProps {
   onLogout: () => void;
 }
 
+import { useNavigate, useLocation } from "react-router-dom";
+
 export function ViralSidebar({
   view,
   onChangeView,
@@ -30,6 +33,8 @@ export function ViralSidebar({
   user,
   onLogout
 }: ViralSidebarProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const NavItem = ({
     id,
@@ -75,8 +80,27 @@ export function ViralSidebar({
           <NavItem id="home" icon={Home} label="Inicio" />
           <NavItem id="viral" icon={Flame} label="Viral" />
           <NavItem id="videos" icon={Search} label="Buscar" />
-          <NavItem id="saved" icon={Bookmark} label="Saved" />
+          <NavItem id="saved" icon={Bookmark} label="Guardado" />
           <NavItem id="glossary" icon={HelpCircle} label="Glosario" />
+
+          <button
+            onClick={() => navigate('/analytics')}
+            className={cn(
+              "group flex w-full flex-col items-center justify-center gap-1 rounded-2xl p-3 transition-all duration-300",
+              location.pathname.startsWith('/analytics')
+                ? "bg-primary/10 text-primary shadow-glow-sm"
+                : "text-muted-foreground hover:bg-surface hover:text-foreground"
+            )}
+          >
+            <LayoutDashboard
+              className={cn(
+                "h-6 w-6 transition-transform duration-300 group-hover:scale-110",
+                location.pathname.startsWith('/analytics') ? "text-primary" : "text-muted-foreground"
+              )}
+              strokeWidth={location.pathname.startsWith('/analytics') ? 2.5 : 2}
+            />
+            <span className="text-[10px] font-bold tracking-wide">Analytics</span>
+          </button>
         </nav>
       </div>
 

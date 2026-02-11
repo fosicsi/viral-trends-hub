@@ -4,11 +4,15 @@ on:
   schedule:
     # Stats: Every 15 minutes
     - cron: '*/15 * * * *'
+    # Reports: Every 30 minutes (at :00 and :30)
+    - cron: '0,30 * * * *'
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
   refresh-stats:
     runs-on: ubuntu-latest
+    # Run only on the 15-minute schedule (not on the 30-minute one)
+    if: github.event.schedule == '*/15 * * * *' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Refresh YouTube Stats Cache
         run: |
@@ -20,7 +24,7 @@ jobs:
   
   refresh-reports:
     runs-on: ubuntu-latest
-    # Run only every 30 minutes (at :00 and :30)
+    # Run only on the 30-minute schedule
     if: github.event.schedule == '0,30 * * * *' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Refresh YouTube Reports Cache

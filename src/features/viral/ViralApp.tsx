@@ -470,7 +470,7 @@ export default function ViralApp() {
                   >
                     {[
                       { icon: <Zap className="w-5 h-5" />, title: "Inspiración IA", desc: "Nichos detectados por nuestra IA.", color: "text-amber-500 bg-amber-500/10", border: "border-amber-500/20", action: handleAiViral },
-                      { icon: <Flame className="w-5 h-5" />, title: "Detector de Outliers", desc: "Videos con 10x más vistas que subs.", color: "text-red-500 bg-red-500/10", border: "border-red-500/20", action: handleOutlierSearch },
+                      { icon: <Flame className="w-5 h-5" />, title: "Detector de Oportunidades", desc: "Videos con 3x más vistas que subs (Outliers).", color: "text-red-500 bg-red-500/10", border: "border-red-500/20", action: handleOutlierSearch },
                       { icon: <Wand2 className="w-5 h-5" />, title: "Kit Viral", desc: "Guiones y prompts listos para usar.", color: "text-purple-500 bg-purple-500/10", border: "border-purple-500/20", action: () => setView("saved") },
                     ].map((card, i) => (
                       <div key={i} onClick={card.action} className={`p-4 rounded-2xl border ${card.border} bg-white/50 dark:bg-slate-900/50 backdrop-blur-md flex flex-col items-center text-center group cursor-pointer hover:scale-105 hover:bg-white dark:hover:bg-slate-900 transition-all shadow-sm hover:shadow-xl`}>

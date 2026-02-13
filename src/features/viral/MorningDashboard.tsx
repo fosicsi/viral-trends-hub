@@ -56,7 +56,7 @@ const MorningCard = ({ item, onAddPlan }: { item: MorningItem, onAddPlan: (item:
 export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMore: () => void, onQuickFilter: (type: 'shorts' | 'small' | 'all') => void }) {
     const [opportunities, setOpportunities] = useState<MorningItem[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const isMounted = useRef(true);
 
     useEffect(() => {
@@ -65,7 +65,7 @@ export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMo
 
     const loadOps = async (force = false) => {
         setLoading(true);
-        setError(false);
+        setError(null);
 
         const res = await getMorningOpportunities(force ? undefined : undefined); // Keyword auto-detected
 
@@ -76,8 +76,9 @@ export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMo
             if (res.source === 'cache') toast.info("Resultados cacheados (Top 5 hoy)");
         } else {
             if (isMounted.current) {
-                setError(true);
-                toast.error("No pudimos cargar las oportunidades. Intenta de nuevo.");
+                const errorMsg = res?.error || "Error de conexión desconocido";
+                setError(errorMsg);
+                toast.error("No pudimos cargar las oportunidades: " + errorMsg);
             }
         }
         if (isMounted.current) setLoading(false);
@@ -128,7 +129,8 @@ export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMo
                     <AlertCircle className="w-10 h-10 text-red-500 opacity-50" />
                     <div className="space-y-1">
                         <h3 className="font-bold text-lg text-foreground">Error de conexión</h3>
-                        <p className="text-sm text-muted-foreground">No pudimos conectar con los servicios de viralidad.</p>
+                        <p className="text-sm text-muted-foreground mb-4">Detalle: {error}</p>
+                        <p className="text-xs text-muted-foreground">Posible causa: Clave API agotada o servidor ocupado.</p>
                     </div>
                     <Button variant="outline" onClick={() => loadOps(true)}>Intentar de nuevo</Button>
                 </div>

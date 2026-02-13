@@ -984,7 +984,7 @@ export default function ViralApp() {
                 <div className="space-y-8">
                   <div className="rounded-[28px] border border-border bg-card p-8 shadow-elev">
                     <div className="space-y-6">
-                      <div><h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">Buscador Viral</h2><p className="text-muted-foreground mt-2 max-w-2xl">Encuentra oportunidades específicas.</p></div>
+                      <div><h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">Buscador de Oportunidades</h2><p className="text-muted-foreground mt-2 max-w-2xl">Encuentra oportunidades específicas.</p></div>
                       <div className="flex gap-2 w-full">
                         <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" /><Input placeholder="Busca un nicho..." className="pl-10 h-14 text-lg rounded-2xl bg-surface/50 border-border" value={viralInput} onChange={(e) => setViralInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && runViralSearch()} /></div>
                         <Button className="h-14 rounded-2xl px-6 font-bold" onClick={() => runViralSearch()} disabled={viralLoading}>{viralLoading ? "..." : "Buscar"}</Button>

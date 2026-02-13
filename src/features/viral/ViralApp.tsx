@@ -977,7 +977,7 @@ export default function ViralApp() {
                     setHasViralSearched(false);
                     if (type === 'shorts') setViralFilters(prev => ({ ...prev, type: 'short' }));
                     if (type === 'small') setViralFilters(prev => ({ ...prev, maxSubs: 10000 }));
-                    setShowViralFilters(true); // Open filters to show what's applied
+                    // Don't auto-open filters, just apply them. User can click "Filtros" if they want to verify.
                   }}
                 />
               ) : view === "search" ? (

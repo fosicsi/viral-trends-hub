@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Zap, RefreshCcw, Search, PlusCircle, ExternalLink, Calendar, TrendingUp, AlertCircle, PlayCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -57,17 +57,26 @@ export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMo
     const [opportunities, setOpportunities] = useState<MorningItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const isMounted = useRef(true);
+
+    useEffect(() => {
+        return () => { isMounted.current = false; };
+    }, []);
 
     const loadOps = async (force = false) => {
         setLoading(true);
         const res = await getMorningOpportunities(force ? undefined : undefined); // Keyword auto-detected
+
+        if (!isMounted.current) return;
+
         if (res?.success && res.data) {
             setOpportunities(res.data);
             if (res.source === 'cache') toast.info("Resultados cacheados (Top 5 hoy)");
         } else {
-            toast.error("Error cargando oportunidades");
+            // Silently fail or log if needed, but don't toast if it's just a navigation abort
+            if (isMounted.current) toast.error("Error cargando oportunidades");
         }
-        setLoading(false);
+        if (isMounted.current) setLoading(false);
     };
 
     useEffect(() => {

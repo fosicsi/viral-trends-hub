@@ -129,11 +129,17 @@ export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMo
                 <div className="flex flex-col items-center justify-center py-24 text-center space-y-4 rounded-3xl border border-dashed border-red-500/20 bg-red-500/5">
                     <AlertCircle className="w-10 h-10 text-red-500 opacity-50" />
                     <div className="space-y-1">
-                        <h3 className="font-bold text-lg text-foreground">Error de conexión</h3>
-                        <p className="text-sm text-muted-foreground mb-4">Detalle: {error}</p>
-                        <p className="text-xs text-muted-foreground">Posible causa: Clave API agotada o servidor ocupado.</p>
+                        <h3 className="font-bold text-lg text-red-500">Error de conexión</h3>
+                        <p className="text-sm text-muted-foreground">Detalle: <span className="font-mono text-xs bg-black/5 dark:bg-white/10 px-1 py-0.5 rounded">{typeof error === 'string' ? error : JSON.stringify(error)}</span></p>
+                        <p className="text-xs text-muted-foreground opacity-70 mt-2">
+                            {(typeof error === 'string' && (error.includes("Quota") || error.includes("429")))
+                                ? "La cuota de YouTube API se ha agotado por hoy."
+                                : (typeof error === 'string' && error.includes("Unauthorized"))
+                                    ? "Sesión expirada. Por favor recarga la página."
+                                    : "El servidor está ocupado o ha ocurrido un error inesperado."}
+                        </p>
                     </div>
-                    <Button variant="outline" onClick={() => loadOps(true)}>Intentar de nuevo</Button>
+                    <Button variant="outline" onClick={() => loadOps(true)} className="mt-4"><RefreshCcw className="w-4 h-4 mr-2" /> Intentar de nuevo</Button>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">

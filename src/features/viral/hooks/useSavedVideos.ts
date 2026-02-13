@@ -31,7 +31,7 @@ export function useSavedVideos() {
       if (planError) console.error("Plan Fetch Error:", planError);
 
       // C. Map Legacy Videos
-      const mappedVideos: VideoItem[] = (videosData || []).map(v => ({
+      const mappedVideos: VideoItem[] = (videosData as any[] || []).map(v => ({
         id: v.youtube_video_id || "",
         title: v.title || "",
         url: v.url || "",

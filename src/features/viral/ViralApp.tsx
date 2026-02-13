@@ -992,12 +992,12 @@ export default function ViralApp() {
                     if (type === 'shorts') {
                       newFilters.type = 'short';
                       newFilters.date = 'month'; // Fresh content
-                      queryTerm = "shorts virales";
+                      queryTerm = `${baseTopic} shorts`;
                     }
                     if (type === 'small') {
                       newFilters.maxSubs = 20000;
                       newFilters.minViews = 2000;
-                      queryTerm = "joyas ocultas";
+                      queryTerm = `${baseTopic} joya oculta`;
                     }
 
                     setFilters(newFilters);

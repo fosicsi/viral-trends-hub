@@ -92,12 +92,36 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
         if (isMounted.current) setLoading(false);
     };
 
-    // Initial Load
+    // Initial Load - Dynamic Niche
     useEffect(() => {
-        // Try to load something generic or user's default if possible, 
-        // but since we want to force "Smart Niche" behavior, we might just load generic "trends" 
-        // or wait for interaction. Let's load generic to avoid emptiness.
-        loadOps("viral trends");
+        const fetchInitialTopic = async () => {
+            let topic = "viral trends"; // Fallback default
+            try {
+                // Import client dynamically to avoid issues or use global if available
+                const { supabase } = await import('@/integrations/supabase/client');
+                const { data: { session } } = await supabase.auth.getSession();
+
+                if (session) {
+                    const { data: identity } = await supabase
+                        .from('user_channel_identities' as any)
+                        .select('identity_profile')
+                        .eq('user_id', session.user.id)
+                        .maybeSingle();
+
+                    const dbTopic = (identity?.identity_profile as any)?.tema_principal;
+                    if (dbTopic) {
+                        topic = dbTopic;
+                        console.log("Initial load with niche:", topic);
+                    }
+                }
+            } catch (e) {
+                console.error("Initial topic fetch failed:", e);
+            }
+            // Load ops with the fetched topic
+            loadOps(topic);
+        };
+
+        fetchInitialTopic();
     }, []);
 
     // FIX TRIPLE: IMPLEMENTACION EXACTA HANDLER
@@ -120,6 +144,8 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
 
                 topic = (identity?.identity_profile as any)?.tema_principal;
                 console.log("Found identity topic:", topic);
+            } else {
+                console.log("No session found in QuickFilter");
             }
         } catch (e) { console.error("Identity check failed", e); }
 
@@ -130,11 +156,26 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
             return;
         }
 
-        // 2. Explicit Call
-        console.log("Calling Ops with:", `${topic} ${type}`);
-        toast.info(`Buscando: ${topic} ${type}...`);
+        // 2. Query Construction (Fixing "Cazar Joyas" empty results)
+        // "joya oculta" is a bad search term. We replace it with context-aware suffixes.
+        let suffix = "";
+        if (type === 'shorts') suffix = " shorts";
 
-        await loadOps(`${topic} ${type}`);
+        // FOR CAZAR JOYAS: Don't use "joya oculta". Use something that works, or just the topic (implies looking for topic).
+        // Maybe "topic + interesting" or just "topic"
+        else if (type === 'joya oculta') suffix = " documentales"; // "Mitos Escocia documentales" or empty
+
+        // Let's use "documentales" as it fits "Mitos" niche well for hidden gems / long form?
+        // OR simply remove it to search BROADER.
+        // User asked why it returns nothing. It's because of the keyword.
+        // Let's try to be smart. "topic" is safest.
+
+        const query = `${topic}${suffix}`;
+
+        console.log("Calling Ops with:", query);
+        toast.info(`Buscando: ${query}...`);
+
+        await loadOps(query);
     };
 
     const handleAddPlan = (item: MorningItem) => {
@@ -158,7 +199,7 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => loadOps("viral trends")} disabled={loading}>
+                    <Button variant="outline" onClick={() => window.location.reload()} disabled={loading}>
                         <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Recargar
                     </Button>
                 </div>
@@ -185,7 +226,6 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
                                     : "El servidor está ocupado o ha ocurrido un error inesperado."}
                         </p>
                     </div>
-                    <Button variant="outline" onClick={() => loadOps("viral trends")} className="mt-4"><RefreshCcw className="w-4 h-4 mr-2" /> Intentar de nuevo</Button>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">

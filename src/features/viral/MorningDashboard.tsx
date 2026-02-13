@@ -20,9 +20,11 @@ const MorningCard = ({ item, onAddPlan }: { item: MorningItem, onAddPlan: (item:
                 <div className="absolute top-2 right-2 flex gap-1">
                     <Badge className="bg-black/70 backdrop-blur text-white border-0">{item.duration || "Short"}</Badge>
                 </div>
-                <div className="absolute bottom-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <TrendingUp className="w-3 h-3" /> {item.ratio.toFixed(1)}x RATIO
-                </div>
+                {item.ratio > 0 && (
+                    <div className="absolute bottom-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <TrendingUp className="w-3 h-3" /> {item.ratio.toFixed(1)}x RATIO
+                    </div>
+                )}
             </div>
 
             <div className="p-4 space-y-3">
@@ -53,7 +55,7 @@ const MorningCard = ({ item, onAddPlan }: { item: MorningItem, onAddPlan: (item:
     );
 };
 
-export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMore: () => void, onQuickFilter: (type: 'shorts' | 'small' | 'all') => void }) {
+export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void }) {
     const [opportunities, setOpportunities] = useState<MorningItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -63,35 +65,79 @@ export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMo
         return () => { isMounted.current = false; };
     }, []);
 
-    const loadOps = async (force = false) => {
+    const loadOps = async (keywords?: string) => {
         setLoading(true);
         setError(null);
 
-        const res = await getMorningOpportunities(force ? undefined : undefined); // Keyword auto-detected
+        try {
+            const res = await getMorningOpportunities(keywords);
 
-        if (!isMounted.current) return;
+            if (!isMounted.current) return;
 
-        if (res?.success && res.data) {
-            setOpportunities(res.data);
-            if (res.source === 'cache') toast.info("Resultados cacheados (Top 5 hoy)");
-        } else {
-            if (isMounted.current) {
-                console.error("Morning Ops Error:", res);
-                const errorMsg = res?.error || res?.message || (typeof res === 'string' ? res : "Error de conexión desconocido");
-                setError(errorMsg);
-                // toast.error("No pudimos cargar las oportunidades: " + errorMsg); // Toast might be spammy if on load
+            if (res?.success && res.data) {
+                setOpportunities(res.data);
+                if (res.source === 'cache') toast.info("Resultados cacheados (Top 5 hoy)");
+            } else {
+                if (isMounted.current) {
+                    console.error("Morning Ops Error:", res);
+                    const errorMsg = res?.error || res?.message || (typeof res === 'string' ? res : "Error de conexión desconocido");
+                    setError(errorMsg);
+                }
             }
+        } catch (e) {
+            console.error(e);
+            setError("Error ejecutando operación");
         }
+
         if (isMounted.current) setLoading(false);
     };
 
+    // Initial Load
     useEffect(() => {
-        loadOps();
+        // Try to load something generic or user's default if possible, 
+        // but since we want to force "Smart Niche" behavior, we might just load generic "trends" 
+        // or wait for interaction. Let's load generic to avoid emptiness.
+        loadOps("viral trends");
     }, []);
 
+    // FIX TRIPLE: IMPLEMENTACION EXACTA HANDLER
+    const handleQuickFilter = async (type: string) => {
+        setLoading(true); // UI Feedback
+
+        // 1. Ensure Topic Logic - Local implementation
+        let topic = "";
+        try {
+            // Dynamic import to avoid circular deps if any, or just direct import
+            const { supabase } = await import('@/integrations/supabase/client');
+            const { data: { session } } = await supabase.auth.getSession();
+
+            if (session) {
+                const { data: identity } = await supabase
+                    .from('user_channel_identities' as any)
+                    .select('identity_profile')
+                    .eq('user_id', session.user.id)
+                    .maybeSingle();
+
+                topic = (identity?.identity_profile as any)?.tema_principal;
+                console.log("Found identity topic:", topic);
+            }
+        } catch (e) { console.error("Identity check failed", e); }
+
+        if (!topic) {
+            // Toast blocking as requested
+            toast.error("Genera tu perfil IA primero", { description: "Ve a Analytics para definir tu nicho." });
+            setLoading(false);
+            return;
+        }
+
+        // 2. Explicit Call
+        console.log("Calling Ops with:", `${topic} ${type}`);
+        toast.info(`Buscando: ${topic} ${type}...`);
+
+        await loadOps(`${topic} ${type}`);
+    };
+
     const handleAddPlan = (item: MorningItem) => {
-        // Logic to add to content plan (Supabase `ai_content_insights`)
-        // For now just toast
         toast.success("Agregado a tu plan de contenidos", { description: "La IA analizará este video." });
     };
 
@@ -112,8 +158,8 @@ export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMo
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => loadOps(true)} disabled={loading}>
-                        <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Actualizar
+                    <Button variant="outline" onClick={() => loadOps("viral trends")} disabled={loading}>
+                        <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Recargar
                     </Button>
                 </div>
             </div>
@@ -139,12 +185,12 @@ export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMo
                                     : "El servidor está ocupado o ha ocurrido un error inesperado."}
                         </p>
                     </div>
-                    <Button variant="outline" onClick={() => loadOps(true)} className="mt-4"><RefreshCcw className="w-4 h-4 mr-2" /> Intentar de nuevo</Button>
+                    <Button variant="outline" onClick={() => loadOps("viral trends")} className="mt-4"><RefreshCcw className="w-4 h-4 mr-2" /> Intentar de nuevo</Button>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-                    {opportunities.map((op) => (
-                        <MorningCard key={op.id} item={op} onAddPlan={handleAddPlan} />
+                    {opportunities.map((op, i) => (
+                        <MorningCard key={op.id || i} item={op} onAddPlan={handleAddPlan} />
                     ))}
                     {opportunities.length === 0 && (
                         <div className="col-span-full py-12 text-center text-muted-foreground bg-card border border-border border-dashed rounded-2xl">
@@ -159,19 +205,19 @@ export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMo
             {/* Quick Actions / Explore More */}
             <div className="border-t border-border pt-12">
                 <div className="flex flex-col items-center justify-center space-y-6 text-center">
-                    <h3 className="text-xl font-bold">¿Buscas algo más específico?</h3>
+                    <h3 className="text-xl font-bold">Exploración Rápida</h3>
                     <p className="text-muted-foreground text-sm max-w-lg -mt-4">
                         Usa los filtros rápidos para encontrar contenido adaptado a tu estrategia.
                     </p>
                     <div className="flex flex-wrap gap-3 justify-center">
                         <Button variant="outline" size="lg" className="rounded-full h-12 px-6" onClick={onExploreMore}>
-                            <Search className="w-4 h-4 mr-2" /> Ir al Buscador General
+                            <Search className="w-4 h-4 mr-2" /> Buscador General
                         </Button>
-                        <Button variant="secondary" size="lg" className="rounded-full h-12 px-6 border border-border/50 hover:bg-red-500/10 hover:text-red-500 transition-colors" onClick={() => onQuickFilter('shorts')}>
+                        <Button variant="secondary" size="lg" className="rounded-full h-12 px-6 border border-border/50 hover:bg-red-500/10 hover:text-red-500 transition-colors" onClick={() => handleQuickFilter('shorts')}>
                             <PlayCircle className="w-4 h-4 mr-2" /> Explorar Shorts
                         </Button>
-                        <Button variant="secondary" size="lg" className="rounded-full h-12 px-6 border border-border/50 hover:bg-green-500/10 hover:text-green-500 transition-colors" onClick={() => onQuickFilter('small')}>
-                            <AlertCircle className="w-4 h-4 mr-2" /> Cazar Canales Pequeños
+                        <Button variant="secondary" size="lg" className="rounded-full h-12 px-6 border border-border/50 hover:bg-green-500/10 hover:text-green-500 transition-colors" onClick={() => handleQuickFilter('joya oculta')}>
+                            <AlertCircle className="w-4 h-4 mr-2" /> Cazar Joyas
                         </Button>
                     </div>
                 </div>
@@ -179,5 +225,3 @@ export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMo
         </div>
     );
 }
-
-export default MorningDashboard;

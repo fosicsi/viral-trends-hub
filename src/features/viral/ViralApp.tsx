@@ -346,10 +346,11 @@ export default function ViralApp() {
     // I'll stick to no toast for now to avoid import errors, or check imports.
   };
 
-  React.useEffect(() => {
-    if (aiCriteria) return;
-    if (view === "viral" && viralResults.length === 0 && !viralLoading) { runViralSearch(viralTopic); }
-  }, [view]);
+  // REMOVED useEffect to prevent Race Condition / Blinking
+  // React.useEffect(() => {
+  //   if (aiCriteria) return;
+  //   if (view === "viral" && viralResults.length === 0 && !viralLoading) { runViralSearch(viralTopic); }
+  // }, [view]);
 
   // --- COMPONENTES AUXILIARES ---
 

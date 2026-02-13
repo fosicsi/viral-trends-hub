@@ -6,8 +6,10 @@ type YoutubeSearchResponse =
   | { success: false; error: string };
 
 export async function youtubeSearch(query: string, filters: ViralFilters): Promise<YoutubeSearchResponse> {
+  const { data: { session } } = await supabase.auth.getSession();
   const { data, error } = await supabase.functions.invoke("youtube-search", {
     body: { query, filters },
+    headers: session ? { Authorization: `Bearer ${session.access_token}` } : undefined,
   });
 
   if (error) return { success: false, error: error.message };

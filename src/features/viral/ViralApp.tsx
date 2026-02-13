@@ -1,5 +1,6 @@
 import * as React from "react";
 import { ViralSidebar, type ViralView } from "./components/ViralSidebar";
+import { toast } from "sonner";
 import { ViralTopbar } from "./components/ViralTopbar";
 import { ViralSearchHeader } from "./components/ViralSearchHeader";
 import { ViralVideoCard } from "./components/ViralVideoCard";
@@ -274,6 +275,31 @@ export default function ViralApp() {
 
   const sortedLiveResults = React.useMemo(() => sortVideos(liveResults, sortBy), [liveResults, sortBy, sortVideos]);
   const sortedViralResults = React.useMemo(() => sortVideos(viralResults, viralSortBy), [viralResults, viralSortBy, sortVideos]);
+
+  const ensureTopic = async (): Promise<string | null> => {
+    // If we already have a valid topic (not the default list one if it's generic, but here we assume entered/AI)
+    if (viralTopic && viralTopic.length > 2 && !VIRAL_TOPICS.includes(viralTopic)) return viralTopic;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return null;
+
+      const { data: identity } = await supabase
+        .from('user_channel_identities' as any)
+        .select('identity_profile')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+
+      const dbTopic = (identity?.identity_profile as any)?.tema_principal;
+      if (dbTopic) {
+        setViralTopic(dbTopic);
+        return dbTopic;
+      }
+    } catch (e) {
+      console.error("Error fetching topic:", e);
+    }
+    return null;
+  };
 
   const handleSearchGeneric = async (q: string, f: ViralFilters, isViral: boolean) => {
     const targetSetResults = isViral ? setViralResults : setLiveResults;
@@ -975,11 +1001,16 @@ export default function ViralApp() {
               {view === "viral" ? (
                 <MorningDashboard
                   onExploreMore={() => setView("search")}
-                  onQuickFilter={(type) => {
-                    // Navigate to Standard Search ("videos" view) instead of Legacy Viral Search
+                  onQuickFilter={async (type) => {
+                    // Navigate to Standard Search ("videos" view) with Context-Aware Query
 
                     // Use the current AI topic or user's niche if available, otherwise fallback
-                    const baseTopic = (viralTopic && viralTopic.length > 2) ? viralTopic : (topic || "");
+                    let baseTopic = (viralTopic && viralTopic.length > 2) ? viralTopic : (viralInput || ""); // Use viralInput
+
+                    if (!baseTopic) {
+                      const fetched = await ensureTopic();
+                      if (fetched) baseTopic = fetched;
+                    }
 
                     if (!baseTopic) {
                       toast.error("Define tu nicho primero", { description: "Escribe tu temática en el buscador o usa la IA para detectar tu nicho." });

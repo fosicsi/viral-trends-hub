@@ -69,6 +69,7 @@ export default function AuthPage() {
                         providers={['google']}
                         view="sign_in"
                         showLinks={true}
+                        redirectTo={window.location.origin}
                     />
                 </CardContent>
             </Card>

@@ -101,6 +101,11 @@ function normalizeFilters(input: any): ViralFilters {
   return { minViews, maxSubs, date, type, order, minRatio };
 }
 
+function toSafeNumber(val: any, fallback: number): number {
+  const n = Number(val);
+  return Number.isNaN(n) ? fallback : n;
+}
+
 function parseDuration(iso: string): number {
   const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!match) return 0;
@@ -151,90 +156,112 @@ Deno.serve(async (req) => {
     const publishedAfter = getPublishedAfterDate(filters.date);
     const dateParam = publishedAfter ? `&publishedAfter=${encodeURIComponent(publishedAfter)}` : "";
 
-    // 2. Función "Cazadora": Busca, descarga detalles y filtra
+    // 2. Función "Cazadora": Busca, descarga detalles y filtra (Soporta Paginación)
     const fetchAndFilter = async (orderBy: string): Promise<InternalVideoItem[]> => {
       console.log(`🔎 Buscando: "${query}" | Orden: ${orderBy} | OAuth: ${useOAuth}`);
 
       const authQuery = useOAuth ? "" : `&key=${apiKey}`;
       const authHeader: HeadersInit = useOAuth ? { "Authorization": `Bearer ${apiKey}` } : {};
 
-      // A. Buscar IDs (Search List)
-      const searchUrl =
-        `https://www.googleapis.com/youtube/v3/search?part=snippet` +
-        `&q=${encodeURIComponent(query)}` +
-        `&type=video&maxResults=50` + // Pedimos el máximo posible
-        `&order=${encodeURIComponent(orderBy)}` +
-        `${durationParam}${dateParam}${authQuery}`;
+      let allCandidates: InternalVideoItem[] = [];
+      let nextPageToken = "";
+      const MAX_PAGES = 3; // Deep Search: Look into up to 150 videos
+      const TARGET_RESULTS = 10; // Stop if we found enough gems
 
-      const sRes = await fetch(searchUrl, { headers: authHeader });
-      const sData = await sRes.json();
+      for (let page = 0; page < MAX_PAGES; page++) {
+        if (allCandidates.length >= TARGET_RESULTS) break;
 
-      if (!sRes.ok) {
-        console.error("Error search API:", sData);
-        return [];
+        // A. Buscar IDs (Search List)
+        const tokenParam = nextPageToken ? `&pageToken=${nextPageToken}` : "";
+        const searchUrl =
+          `https://www.googleapis.com/youtube/v3/search?part=snippet` +
+          `&q=${encodeURIComponent(query)}` +
+          `&type=video&maxResults=50` +
+          `&order=${encodeURIComponent(orderBy)}` +
+          `${durationParam}${dateParam}${tokenParam}${authQuery}`;
+
+        const sRes = await fetch(searchUrl, { headers: authHeader });
+        const sData = await sRes.json();
+
+        if (!sRes.ok) {
+          console.error("Error search API:", sData);
+          break;
+        }
+
+        const items: any[] = Array.isArray(sData?.items) ? sData.items : [];
+        if (items.length === 0) break;
+
+        nextPageToken = sData.nextPageToken || "";
+
+        // B. Obtener Estadísticas (Videos List)
+        const vIds = items.map((i) => i?.id?.videoId).filter(Boolean).join(",");
+        if (!vIds) break;
+
+        const vRes = await fetch(
+          `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics,snippet&id=${encodeURIComponent(vIds)}${authQuery}`,
+          { headers: authHeader }
+        );
+        const vData = await vRes.json();
+        const vItems: any[] = Array.isArray(vData?.items) ? vData.items : [];
+
+        // C. Obtener Suscriptores (Channels List)
+        const channelIds = [...new Set(vItems.map((v) => v?.snippet?.channelId).filter(Boolean))].join(",");
+        if (!channelIds) break;
+
+        const cRes = await fetch(
+          `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${encodeURIComponent(channelIds)}${authQuery}`,
+          { headers: authHeader }
+        );
+        const cData = await cRes.json();
+
+        // Mapa rápido de ID -> Stats
+        const cStats: Record<string, any> = {};
+        (Array.isArray(cData?.items) ? cData.items : []).forEach((c: any) => {
+          if (c?.id) cStats[c.id] = c?.statistics;
+        });
+
+        // D. Procesar y Filtrar (El momento de la verdad)
+        const pageCandidates = vItems
+          .map((v: any) => {
+            const views = Number(v?.statistics?.viewCount || 0);
+            const channelId = v?.snippet?.channelId;
+            const subs = Number(cStats[channelId]?.subscriberCount || 0);
+
+            // Si subs es 0 (oculto), estimamos algo conservador para no romper el ratio
+            const safeSubs = subs > 0 ? subs : Math.max(1, Math.floor(views / 100));
+
+            const durSeconds = parseDuration(String(v?.contentDetails?.duration || "PT0S"));
+
+            return {
+              id: String(v?.id),
+              title: String(v?.snippet?.title || ""),
+              channel: String(v?.snippet?.channelTitle || ""),
+              channelSubscribers: subs, // Guardamos el real (aunque sea 0)
+              views,
+              publishedAt: String(v?.snippet?.publishedAt || ""),
+              durationString: toDurationString(durSeconds),
+              _durSeconds: durSeconds,
+              thumbnail: v?.snippet?.thumbnails?.high?.url || v?.snippet?.thumbnails?.medium?.url || "",
+              url: `https://www.youtube.com/watch?v=${v?.id}`,
+              growthRatio: views / Math.max(1, safeSubs),
+            };
+          })
+          .filter((v) => v.thumbnail && v.title)
+          .filter((v) => v._durSeconds <= 60) // Filtro duro de 60s
+          .filter((v) => {
+            // EL GRAN FILTRO: Aquí es donde mueren los canales grandes
+            const passViews = v.views >= filters.minViews;
+            const passSubs = v.channelSubscribers <= filters.maxSubs;
+            const passRatio = filters.minRatio ? v.growthRatio >= filters.minRatio : true;
+            return passViews && passSubs && passRatio;
+          });
+
+        allCandidates = [...allCandidates, ...pageCandidates];
+
+        if (!nextPageToken) break; // No more pages
       }
 
-      const items: any[] = Array.isArray(sData?.items) ? sData.items : [];
-      if (items.length === 0) return [];
-
-      // B. Obtener Estadísticas (Videos List)
-      const vIds = items.map((i) => i?.id?.videoId).filter(Boolean).join(",");
-      const vRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics,snippet&id=${encodeURIComponent(vIds)}${authQuery}`,
-        { headers: authHeader }
-      );
-      const vData = await vRes.json();
-      const vItems: any[] = Array.isArray(vData?.items) ? vData.items : [];
-
-      // C. Obtener Suscriptores (Channels List)
-      const channelIds = [...new Set(vItems.map((v) => v?.snippet?.channelId).filter(Boolean))].join(",");
-      const cRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${encodeURIComponent(channelIds)}${authQuery}`,
-        { headers: authHeader }
-      );
-      const cData = await cRes.json();
-
-      // Mapa rápido de ID -> Stats
-      const cStats: Record<string, any> = {};
-      (Array.isArray(cData?.items) ? cData.items : []).forEach((c: any) => {
-        if (c?.id) cStats[c.id] = c?.statistics;
-      });
-
-      // D. Procesar y Filtrar (El momento de la verdad)
-      return vItems
-        .map((v: any) => {
-          const views = Number(v?.statistics?.viewCount || 0);
-          const channelId = v?.snippet?.channelId;
-          const subs = Number(cStats[channelId]?.subscriberCount || 0);
-
-          // Si subs es 0 (oculto), estimamos algo conservador para no romper el ratio
-          const safeSubs = subs > 0 ? subs : Math.max(1, Math.floor(views / 100));
-
-          const durSeconds = parseDuration(String(v?.contentDetails?.duration || "PT0S"));
-
-          return {
-            id: String(v?.id),
-            title: String(v?.snippet?.title || ""),
-            channel: String(v?.snippet?.channelTitle || ""),
-            channelSubscribers: subs, // Guardamos el real (aunque sea 0)
-            views,
-            publishedAt: String(v?.snippet?.publishedAt || ""),
-            durationString: toDurationString(durSeconds),
-            _durSeconds: durSeconds,
-            thumbnail: v?.snippet?.thumbnails?.high?.url || v?.snippet?.thumbnails?.medium?.url || "",
-            url: `https://www.youtube.com/watch?v=${v?.id}`,
-            growthRatio: views / Math.max(1, safeSubs),
-          };
-        })
-        .filter((v) => v.thumbnail && v.title)
-        .filter((v) => v._durSeconds <= 60) // Filtro duro de 60s
-        .filter((v) => {
-          // EL GRAN FILTRO: Aquí es donde mueren los canales grandes
-          const passViews = v.views >= filters.minViews;
-          const passSubs = v.channelSubscribers <= filters.maxSubs;
-          const passRatio = filters.minRatio ? v.growthRatio >= filters.minRatio : true;
-          return passViews && passSubs && passRatio;
-        });
+      return allCandidates;
     };
 
     // --- ESTRATEGIA DE EJECUCIÓN ---
@@ -268,10 +295,11 @@ Deno.serve(async (req) => {
     });
 
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Unexpected error";
+    const msg = e instanceof Error ? e.message : "Unexpected error/Timeout";
     console.error("Critical error:", msg);
+    // Return 200 OK even on error so frontend can parse the message
     return new Response(JSON.stringify({ success: false, error: msg }), {
-      status: 500,
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

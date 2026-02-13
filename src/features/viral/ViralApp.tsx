@@ -313,7 +313,7 @@ export default function ViralApp() {
   };
 
   const runViralSearch = (topic?: string, overrideFilters?: ViralFilters) => {
-    const q = topic || viralInput || viralTopic;
+    const q = topic || viralInput || viralTopic || "viral";
     handleSearchGeneric(q, overrideFilters || viralFilters, true);
   };
 

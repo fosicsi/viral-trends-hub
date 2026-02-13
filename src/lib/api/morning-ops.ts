@@ -19,7 +19,11 @@ export async function getMorningOpportunities(keywords?: string): Promise<{ succ
     if (!session) return { success: false, error: "Unauthorized", data: [] };
 
     const { data, error } = await supabase.functions.invoke("get-morning-opportunities", {
-        body: { userId: session.user.id, keywords },
+        body: {
+            userId: session.user.id,
+            keywords,
+            _t: Date.now() // Force cache bust
+        },
         headers: {
             Authorization: `Bearer ${session.access_token}`
         }

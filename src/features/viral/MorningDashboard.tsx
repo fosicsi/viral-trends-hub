@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Zap, RefreshCcw, Search, PlusCircle, ExternalLink, Calendar, TrendingUp, AlertCircle, PlayCircle } from 'lucide-react';
+import { Zap, RefreshCcw, Search, PlusCircle, ExternalLink, Calendar, TrendingUp, AlertCircle, PlayCircle, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { getMorningOpportunities, type MorningItem } from '@/lib/api/morning-ops';
@@ -15,9 +15,12 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+    // Use a ref to track if we have already fired the load effect to prevent double calls in strict mode, 
+    // BUT we need to be careful with hot reload.
     const hasFetched = useRef(false);
     const navigate = useNavigate();
     const [selectedVideo, setSelectedVideo] = useState<MorningItem | null>(null);
+    const [detectedNiche, setDetectedNiche] = useState<string>("Detectando...");
 
     const loadOpportunities = async () => {
         setLoading(true);
@@ -30,20 +33,26 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
                 return;
             }
 
+            // CORRECTED: Fetch identity_profile from user_channel_identities
             const { data: identityData, error: identityError } = await supabase
                 .from('user_channel_identities')
-                .select('*')
+                .select('identity_profile')
                 .eq('user_id', session.user.id)
                 .maybeSingle();
 
             if (identityError) {
                 console.error("Identity Error:", identityError);
-                // Continue with defaults if error, or handle
             }
 
-            const userNiche = (identityData as any)?.niche || "Tecnología";
+            // Extract topic from JSONB Profile
+            // Fallback to "Tecnología" only if absolutely nothing is found
+            const userNiche = (identityData?.identity_profile as any)?.tema_principal || "Technology";
+
+            setDetectedNiche(userNiche); // For Debug UI
+            console.log("Loading Morning Ops for Niche:", userNiche);
 
             // 2. Fetch Opportunities
+            // Add forced timestamp to prevent aggressive caching
             const res = await getMorningOpportunities(userNiche);
             if (res.success) {
                 setOpportunities(res.data as any[]); // Force cast to fix type mismatch
@@ -60,10 +69,8 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
     };
 
     useEffect(() => {
-        if (!hasFetched.current) {
-            loadOpportunities();
-            hasFetched.current = true;
-        }
+        // Simple mount check
+        loadOpportunities();
     }, []);
 
     const handleQuickFilter = (type: string) => {
@@ -117,12 +124,19 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
                     <h1 className="text-3xl md:text-4xl font-black tracking-tight flex items-center gap-3">
                         Tus Oportunidades Hoy <Zap className="w-6 h-6 text-yellow-500 fill-current animate-pulse" />
                     </h1>
-                    <p className="text-muted-foreground mt-2 max-w-xl">
-                        Top 5 videos virales detectados hoy en tu nicho. Canales pequeños, alto impacto.
-                    </p>
+                    <div className="flex items-center gap-2 mt-2">
+                        <p className="text-muted-foreground max-w-xl">
+                            Top 5 videos virales detectados hoy en tu nicho.
+                        </p>
+                        {/* DEBUG BADGE */}
+                        <Badge variant="secondary" className="text-[10px] font-mono opacity-70">
+                            <Target className="w-3 h-3 mr-1" /> {detectedNiche} (v2)
+                        </Badge>
+                    </div>
+
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => window.location.reload()} disabled={loading}>
+                    <Button variant="outline" onClick={() => loadOpportunities()} disabled={loading}>
                         <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Recargar
                     </Button>
                 </div>
@@ -153,18 +167,18 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                     {opportunities.map((op, i) => {
-                        // Map MorningItem to VideoItem for the ViralVideoCard
+                        // Safe mapping to prevent crashes in ViralVideoCard
                         const videoItem: any = {
-                            id: op.id,
-                            title: op.title,
-                            thumbnail: op.thumbnail,
-                            channel: op.channelTitle,
-                            views: op.views,
-                            publishedAt: op.publishedAt,
-                            channelSubscribers: op.channelSubs,
+                            id: op.id || `temp-${i}`,
+                            title: op.title || "Sin título",
+                            thumbnail: op.thumbnail || "",
+                            channel: op.channelTitle || "Desconocido",
+                            views: Number(op.views) || 0,
+                            publishedAt: op.publishedAt || new Date().toISOString(),
+                            channelSubscribers: Number(op.channelSubs) || 0,
                             durationString: op.duration || "Short",
-                            growthRatio: op.ratio,
-                            url: `https://youtube.com/watch?v=${op.id}`,
+                            growthRatio: Number(op.ratio) || 0,
+                            url: op.id ? `https://youtube.com/watch?v=${op.id}` : "#",
                         };
 
                         return (
@@ -172,7 +186,7 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
                                 key={op.id || i}
                                 video={videoItem}
                                 onOpen={() => setSelectedVideo(op)}
-                                saved={false} // We could check isSaved from hook if we imported it, but for now false to show 'Save' button consistently to trigger add plan
+                                saved={false}
                                 onToggleSave={() => handleAddPlan(op)}
                             />
                         );
@@ -213,10 +227,10 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setSelectedVideo(null)}>
                     <div className="relative w-full max-w-4xl aspect-video bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/10" onClick={e => e.stopPropagation()}>
                         <iframe
-                            src={`https://www.youtube.com/embed/${selectedVideo.id}?autoplay=1&rel=0`}
+                            src={`https://www.youtube.com/embed/${selectedVideo.id}?autoplay=0&rel=0`}
                             title={selectedVideo.title}
                             className="w-full h-full"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                             allowFullScreen
                         />
                         <button

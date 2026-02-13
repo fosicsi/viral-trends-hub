@@ -5,175 +5,104 @@ import { Zap, RefreshCcw, Search, PlusCircle, ExternalLink, Calendar, TrendingUp
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { getMorningOpportunities, type MorningItem } from '@/lib/api/morning-ops';
-import { ViralVideoCard } from './components/ViralVideoCard'; // Using existing card for now, or adapted inline.
+import { ViralVideoCard } from './components/ViralVideoCard';
 import { toast } from 'sonner';
-
-// Local components removed in favor of ViralVideoCard
-;
+import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
 
 export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void }) {
     const [opportunities, setOpportunities] = useState<MorningItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const isMounted = useRef(true);
+    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+    const hasFetched = useRef(false);
+    const navigate = useNavigate();
+    const [selectedVideo, setSelectedVideo] = useState<MorningItem | null>(null);
 
-    useEffect(() => {
-        return () => { isMounted.current = false; };
-    }, []);
-
-    const loadOps = async (keywords?: string) => {
+    const loadOpportunities = async () => {
         setLoading(true);
         setError(null);
-
         try {
-            const res = await getMorningOpportunities(keywords);
-
-            if (!isMounted.current) return;
-
-            if (res?.success && res.data) {
-                setOpportunities(res.data);
-                if (res.source === 'cache') toast.info("Resultados cacheados (Top 5 hoy)");
-            } else {
-                if (isMounted.current) {
-                    console.error("Morning Ops Error:", res);
-                    const errorMsg = res?.error || res?.message || (typeof res === 'string' ? res : "Error de conexión desconocido");
-                    setError(errorMsg);
-                }
-            }
-        } catch (e) {
-            console.error(e);
-            setError("Error ejecutando operación");
-        }
-
-        if (isMounted.current) setLoading(false);
-    };
-
-    // Initial Load - Dynamic Niche
-    useEffect(() => {
-        const fetchInitialTopic = async () => {
-            let topic = "viral trends"; // Fallback default
-            try {
-                // Import client dynamically to avoid issues or use global if available
-                const { supabase } = await import('@/integrations/supabase/client');
-                const { data: { session } } = await supabase.auth.getSession();
-
-                if (session) {
-                    const { data: identity } = await supabase
-                        .from('user_channel_identities' as any)
-                        .select('identity_profile')
-                        .eq('user_id', session.user.id)
-                        .maybeSingle();
-
-                    const dbTopic = (identity?.identity_profile as any)?.tema_principal;
-                    if (dbTopic) {
-                        topic = dbTopic;
-                        console.log("Initial load with niche:", topic);
-                    }
-                }
-            } catch (e) {
-                console.error("Initial topic fetch failed:", e);
-            }
-            // Load ops with the fetched topic
-            loadOps(topic);
-        };
-
-        fetchInitialTopic();
-    }, []);
-
-    // FIX TRIPLE: IMPLEMENTACION EXACTA HANDLER
-    const handleQuickFilter = async (type: string) => {
-        setLoading(true); // UI Feedback
-
-        // 1. Ensure Topic Logic - Local implementation
-        let topic = "";
-        try {
-            // Dynamic import to avoid circular deps if any, or just direct import
-            const { supabase } = await import('@/integrations/supabase/client');
+            // 1. Get User Channel Identity
             const { data: { session } } = await supabase.auth.getSession();
-
-            if (session) {
-                const { data: identity } = await supabase
-                    .from('user_channel_identities' as any)
-                    .select('identity_profile')
-                    .eq('user_id', session.user.id)
-                    .maybeSingle();
-
-                topic = (identity?.identity_profile as any)?.tema_principal;
-                console.log("Found identity topic:", topic);
-            } else {
-                console.log("No session found in QuickFilter");
-            }
-        } catch (e) { console.error("Identity check failed", e); }
-
-        if (!topic) {
-            // Toast blocking as requested
-            toast.error("Genera tu perfil IA primero", { description: "Ve a Analytics para definir tu nicho." });
-            setLoading(false);
-            return;
-        }
-
-        // 2. Query Construction (Fixing "Cazar Joyas" empty results)
-        // "joya oculta" is a bad search term. We replace it with context-aware suffixes.
-        let suffix = "";
-        if (type === 'shorts') suffix = " shorts";
-
-        // FOR CAZAR JOYAS: Don't use "joya oculta". Use something that works, or just the topic (implies looking for topic).
-        // Maybe "topic + interesting" or just "topic"
-        else if (type === 'joya oculta') suffix = " documentales"; // "Mitos Escocia documentales" or empty
-
-        // Let's use "documentales" as it fits "Mitos" niche well for hidden gems / long form?
-        // OR simply remove it to search BROADER.
-        // User asked why it returns nothing. It's because of the keyword.
-        // Let's try to be smart. "topic" is safest.
-
-        const query = `${topic}${suffix}`;
-
-        console.log("Calling Ops with:", query);
-        toast.info(`Buscando: ${query}...`);
-
-        await loadOps(query);
-    };
-
-    const handleAddPlan = async (item: MorningItem) => {
-        try {
-            const { supabase } = await import('@/integrations/supabase/client');
-            const { data: { session } } = await supabase.auth.getSession();
-
             if (!session) {
-                toast.error("Debes iniciar sesión");
+                setError("No hay sesión activa");
                 return;
             }
 
-            toast.promise(
-                async () => {
-                    const { error } = await supabase
-                        .from('content_creation_plan' as any)
-                        .insert({
-                            user_id: session.user.id,
-                            title: `Idea de: ${item.title}`,
-                            source_video_id: item.id,
-                            source_title: item.title,
-                            source_thumbnail: item.thumbnail,
-                            source_channel: item.channelTitle,
-                            source_views: Number(item.views),
-                            source_channel_subs: Number(item.channelSubs),
-                            status: 'idea',
-                            ai_suggestions: `Inspirado en viral del canal ${item.channelTitle} (${Number(item.views).toLocaleString()} vistas). Razón: ${item.reason}`
-                        });
+            const { data: identityData, error: identityError } = await supabase
+                .from('user_channel_identities')
+                .select('*')
+                .eq('user_id', session.user.id)
+                .maybeSingle();
 
-                    if (error) throw error;
-                },
-                {
-                    loading: 'Guardando en tu Plan de Contenidos...',
-                    success: '¡Guardado! La IA puede generar el guion ahora.',
-                    error: 'Error al guardar. Intenta de nuevo.'
-                }
-            );
+            if (identityError) {
+                console.error("Identity Error:", identityError);
+                // Continue with defaults if error, or handle
+            }
 
-        } catch (e) {
-            console.error("Add Plan Error:", e);
-            toast.error("Error desconocido al guardar");
+            const userNiche = (identityData as any)?.niche || "Tecnología";
+
+            // 2. Fetch Opportunities
+            const res = await getMorningOpportunities(userNiche);
+            if (res.success) {
+                setOpportunities(res.data as any[]); // Force cast to fix type mismatch
+                setLastUpdated(new Date());
+            } else {
+                setError(res.error || "Error desconocido");
+            }
+        } catch (err) {
+            console.error(err);
+            setError(err instanceof Error ? err.message : "Error de conexión");
+        } finally {
+            setLoading(false);
         }
+    };
+
+    useEffect(() => {
+        if (!hasFetched.current) {
+            loadOpportunities();
+            hasFetched.current = true;
+        }
+    }, []);
+
+    const handleQuickFilter = (type: string) => {
+        // Implement filtering or navigation to explore with preset
+        onExploreMore();
+    };
+
+    const handleAddPlan = async (item: MorningItem) => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            toast.error("Debes iniciar sesión");
+            return;
+        }
+
+        toast.promise(
+            async () => {
+                const { error } = await supabase
+                    .from('content_creation_plan' as any)
+                    .insert({
+                        user_id: session.user.id,
+                        title: `Idea de: ${item.title}`,
+                        source_video_id: item.id,
+                        source_title: item.title,
+                        source_thumbnail: item.thumbnail,
+                        source_channel: item.channelTitle,
+                        source_views: Number(item.views),
+                        source_channel_subs: Number(item.channelSubs),
+                        status: 'idea',
+                        ai_suggestions: `Inspirado en viral del canal ${item.channelTitle} (${Number(item.views).toLocaleString()} vistas). Razón: ${item.reason}`
+                    });
+
+                if (error) throw error;
+            },
+            {
+                loading: 'Guardando en tu Plan de Contenidos...',
+                success: '¡Guardado! La IA puede generar el guion ahora.',
+                error: 'Error al guardar. Intenta de nuevo.'
+            }
+        );
     };
 
     return (
@@ -223,16 +152,31 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-                    {opportunities.map((op, i) => (
-                        <MorningCard
-                            key={op.id || i}
-                            item={op}
-                            onAddPlan={(e) => {
-                                e.stopPropagation();
-                                handleAddPlan(op);
-                            }}
-                        />
-                    ))}
+                    {opportunities.map((op, i) => {
+                        // Map MorningItem to VideoItem for the ViralVideoCard
+                        const videoItem: any = {
+                            id: op.id,
+                            title: op.title,
+                            thumbnail: op.thumbnail,
+                            channel: op.channelTitle,
+                            views: op.views,
+                            publishedAt: op.publishedAt,
+                            channelSubscribers: op.channelSubs,
+                            durationString: op.duration || "Short",
+                            growthRatio: op.ratio,
+                            url: `https://youtube.com/watch?v=${op.id}`,
+                        };
+
+                        return (
+                            <ViralVideoCard
+                                key={op.id || i}
+                                video={videoItem}
+                                onOpen={() => setSelectedVideo(op)}
+                                saved={false} // We could check isSaved from hook if we imported it, but for now false to show 'Save' button consistently to trigger add plan
+                                onToggleSave={() => handleAddPlan(op)}
+                            />
+                        );
+                    })}
                     {opportunities.length === 0 && (
                         <div className="col-span-full py-12 text-center text-muted-foreground bg-card border border-border border-dashed rounded-2xl">
                             <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -263,6 +207,28 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
                     </div>
                 </div>
             </div>
+
+            {/* Video Modal */}
+            {selectedVideo && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setSelectedVideo(null)}>
+                    <div className="relative w-full max-w-4xl aspect-video bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/10" onClick={e => e.stopPropagation()}>
+                        <iframe
+                            src={`https://www.youtube.com/embed/${selectedVideo.id}?autoplay=1&rel=0`}
+                            title={selectedVideo.title}
+                            className="w-full h-full"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                        />
+                        <button
+                            onClick={() => setSelectedVideo(null)}
+                            className="absolute top-4 right-4 bg-black/50 hover:bg-black/80 text-white p-2 rounded-full transition-colors backdrop-blur-md border border-white/10"
+                        >
+                            <span className="sr-only">Cerrar</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -977,8 +977,17 @@ export default function ViralApp() {
                   onExploreMore={() => setView("search")}
                   onQuickFilter={(type) => {
                     // Navigate to Standard Search ("videos" view) instead of Legacy Viral Search
+
+                    // Use the current AI topic or user's niche if available, otherwise fallback
+                    const baseTopic = (viralTopic && viralTopic.length > 2) ? viralTopic : (topic || "");
+
+                    if (!baseTopic) {
+                      toast.error("Define tu nicho primero", { description: "Escribe tu temática en el buscador o usa la IA para detectar tu nicho." });
+                      return;
+                    }
+
                     const newFilters = { ...filters }; // Use global filters base
-                    let queryTerm = "tendencias";
+                    let queryTerm = baseTopic;
 
                     if (type === 'shorts') {
                       newFilters.type = 'short';

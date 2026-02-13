@@ -8,59 +8,8 @@ import { getMorningOpportunities, type MorningItem } from '@/lib/api/morning-ops
 import { ViralVideoCard } from './components/ViralVideoCard'; // Using existing card for now, or adapted inline.
 import { toast } from 'sonner';
 
-// Reusing ViralVideoCard logic or creating a simplified version for Morning Ops
-const MorningCard = ({ item, onAddPlan }: { item: MorningItem, onAddPlan: (e: React.MouseEvent) => void }) => {
-    return (
-        <motion.div
-            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-            className="group relative bg-card border-border border rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all"
-        >
-            <div className="aspect-video relative overflow-hidden bg-muted">
-                <img src={item.thumbnail} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                <div className="absolute top-2 right-2 flex gap-1">
-                    <Badge className="bg-black/70 backdrop-blur text-white border-0">{item.duration || "Short"}</Badge>
-                </div>
-                {item.ratio > 0 && (
-                    <div className="absolute bottom-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                        <TrendingUp className="w-3 h-3" /> {item.ratio.toFixed(1)}x RATIO
-                    </div>
-                )}
-            </div>
-
-            <div className="p-4 space-y-3">
-                <h3 className="font-bold text-sm line-clamp-2 leading-tight group-hover:text-primary transition-colors">{item.title}</h3>
-
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span className="font-medium truncate max-w-[120px]" title={item.channelTitle}>{item.channelTitle}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground border-t border-border/50 pt-2">
-                    <span className="flex items-center gap-1">
-                        <span className="font-bold text-foreground">{Number(item.views).toLocaleString()}</span> views
-                    </span>
-                    <span className="flex items-center gap-1">
-                        <span className="font-bold text-foreground">{Number(item.channelSubs).toLocaleString()}</span> subs
-                    </span>
-                </div>
-
-                <div className="pt-2 border-t border-border/50 flex gap-2">
-                    <Button variant="default" size="sm" className="w-full font-bold shadow-md shadow-primary/20" onClick={onAddPlan}>
-                        <PlusCircle className="w-4 h-4 mr-2" /> Agregar al Plan
-                    </Button>
-                    <Button variant="ghost" size="icon" className="shrink-0" onClick={() => window.open(`https://youtube.com/watch?v=${item.id}`, '_blank')}>
-                        <ExternalLink className="w-4 h-4" />
-                    </Button>
-                </div>
-
-                {item.reason && (
-                    <div className="bg-primary/5 p-2 rounded-lg text-[10px] text-primary font-medium flex gap-2 items-start border border-primary/10">
-                        <Zap className="w-3 h-3 shrink-0 mt-0.5" />
-                        {item.reason}
-                    </div>
-                )}
-            </div>
-        </motion.div>
-    );
-};
+// Local components removed in favor of ViralVideoCard
+;
 
 export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void }) {
     const [opportunities, setOpportunities] = useState<MorningItem[]>([]);

@@ -312,7 +312,10 @@ export default function ViralApp() {
     } catch (e) { setViralError("Error conectando con IA"); } finally { setAiLoading(false); }
   };
 
-  const runViralSearch = (topic?: string) => { const q = topic || viralInput || viralTopic; handleSearchGeneric(q, viralFilters, true); };
+  const runViralSearch = (topic?: string, overrideFilters?: ViralFilters) => {
+    const q = topic || viralInput || viralTopic;
+    handleSearchGeneric(q, overrideFilters || viralFilters, true);
+  };
 
   const handleSearch = async () => {
     handleSearchGeneric(query, filters, false);
@@ -975,9 +978,15 @@ export default function ViralApp() {
                     setView("search");
                     setViralResults([]); // Clear previous
                     setHasViralSearched(false);
-                    if (type === 'shorts') setViralFilters(prev => ({ ...prev, type: 'short' }));
-                    if (type === 'small') setViralFilters(prev => ({ ...prev, maxSubs: 10000 }));
-                    // Don't auto-open filters, just apply them. User can click "Filtros" if they want to verify.
+
+                    const newFilters = { ...viralFilters };
+                    if (type === 'shorts') newFilters.type = 'short';
+                    if (type === 'small') newFilters.maxSubs = 10000;
+
+                    setViralFilters(newFilters);
+
+                    // Trigger search immediately with new configuration
+                    runViralSearch(undefined, newFilters);
                   }}
                 />
               ) : view === "search" ? (

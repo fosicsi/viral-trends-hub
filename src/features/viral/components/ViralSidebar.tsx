@@ -78,8 +78,8 @@ export function ViralSidebar({
 
         <nav className="flex flex-col gap-3 mt-4">
           <NavItem id="home" icon={Home} label="Inicio" />
-          <NavItem id="viral" icon={Flame} label="Viral" />
-          <NavItem id="videos" icon={Search} label="Buscar" />
+
+          <NavItem id="search" icon={Search} label="Buscar" />
           <NavItem id="saved" icon={Bookmark} label="Guardado" />
           <NavItem id="glossary" icon={HelpCircle} label="Glosario" />
 

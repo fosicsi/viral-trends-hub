@@ -53,7 +53,7 @@ const MorningCard = ({ item, onAddPlan }: { item: MorningItem, onAddPlan: (item:
     );
 };
 
-export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void }) {
+export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMore: () => void, onQuickFilter: (type: 'shorts' | 'small' | 'all') => void }) {
     const [opportunities, setOpportunities] = useState<MorningItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -119,7 +119,7 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
                         <div className="col-span-full py-12 text-center text-muted-foreground bg-card border border-border border-dashed rounded-2xl">
                             <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
                             <p>No encontramos oportunidades exactas hoy. Prueba explorando manualmente.</p>
-                            <Button variant="link" onClick={onExploreMore}>Ir al Explorador</Button>
+                            <Button variant="link" onClick={onExploreMore}>Ir al Buscador</Button>
                         </div>
                     )}
                 </div>
@@ -131,12 +131,12 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
                     <h3 className="text-xl font-bold">¿Necesitas más inspiración?</h3>
                     <div className="flex flex-wrap gap-3 justify-center">
                         <Button variant="outline" size="lg" className="rounded-full h-12 px-6" onClick={onExploreMore}>
-                            <Search className="w-4 h-4 mr-2" /> Explorador Viral Completo
+                            <Search className="w-4 h-4 mr-2" /> Ir al Buscador
                         </Button>
-                        <Button variant="secondary" size="lg" className="rounded-full h-12 px-6">
+                        <Button variant="secondary" size="lg" className="rounded-full h-12 px-6" onClick={() => onQuickFilter('shorts')}>
                             <PlayCircle className="w-4 h-4 mr-2" /> Solo Shorts
                         </Button>
-                        <Button variant="secondary" size="lg" className="rounded-full h-12 px-6">
+                        <Button variant="secondary" size="lg" className="rounded-full h-12 px-6" onClick={() => onQuickFilter('small')}>
                             <AlertCircle className="w-4 h-4 mr-2" /> Canales Pequeños (-10k)
                         </Button>
                     </div>

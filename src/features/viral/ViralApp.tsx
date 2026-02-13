@@ -969,15 +969,25 @@ export default function ViralApp() {
           {(view === "viral" || view === "search" || view === "saved" || view === "tools" || view === "glossary") && (
             <section className="max-w-6xl mx-auto px-6 md:px-10 py-16 animate-in fade-in">
               {view === "viral" ? (
-                <MorningDashboard onExploreMore={() => setView("search")} />
+                <MorningDashboard
+                  onExploreMore={() => setView("search")}
+                  onQuickFilter={(type) => {
+                    setView("search");
+                    setViralResults([]); // Clear previous
+                    setHasViralSearched(false);
+                    if (type === 'shorts') setViralFilters(prev => ({ ...prev, type: 'short' }));
+                    if (type === 'small') setViralFilters(prev => ({ ...prev, maxSubs: 10000 }));
+                    setShowViralFilters(true); // Open filters to show what's applied
+                  }}
+                />
               ) : view === "search" ? (
                 <div className="space-y-8">
                   <div className="rounded-[28px] border border-border bg-card p-8 shadow-elev">
                     <div className="space-y-6">
-                      <div><h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">Explorador Viral</h2><p className="text-muted-foreground mt-2 max-w-2xl">“Sorpréndeme” detecta oportunidades en canales pequeños.</p></div>
+                      <div><h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">Buscador Viral</h2><p className="text-muted-foreground mt-2 max-w-2xl">Encuentra oportunidades específicas.</p></div>
                       <div className="flex gap-2 w-full">
                         <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" /><Input placeholder="Busca un nicho..." className="pl-10 h-14 text-lg rounded-2xl bg-surface/50 border-border" value={viralInput} onChange={(e) => setViralInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && runViralSearch()} /></div>
-                        <Button className="h-14 rounded-2xl px-6 font-bold" onClick={() => runViralSearch()} disabled={viralLoading}>{viralLoading ? "..." : "Explorar"}</Button>
+                        <Button className="h-14 rounded-2xl px-6 font-bold" onClick={() => runViralSearch()} disabled={viralLoading}>{viralLoading ? "..." : "Buscar"}</Button>
                         <Button variant="glowOutline" className="h-14 rounded-2xl px-6" onClick={() => setShowViralFilters(true)}>Filtros</Button>
                       </div>
                       {aiCriteria && (<div className="mt-4 rounded-2xl border border-border bg-surface px-4 py-3"><p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Criterio IA</p><p className="mt-1 text-sm"><span className="font-extrabold">Topic:</span> {viralTopic}</p><p className="mt-2 text-sm text-muted-foreground">{aiCriteria}</p></div>)}

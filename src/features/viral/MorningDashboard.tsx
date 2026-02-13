@@ -185,8 +185,44 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
         await loadOps(query);
     };
 
-    const handleAddPlan = (item: MorningItem) => {
-        toast.success("Agregado a tu plan de contenidos", { description: "La IA analizará este video." });
+    const handleAddPlan = async (item: MorningItem) => {
+        try {
+            const { supabase } = await import('@/integrations/supabase/client');
+            const { data: { session } } = await supabase.auth.getSession();
+
+            if (!session) {
+                toast.error("Debes iniciar sesión");
+                return;
+            }
+
+            toast.promise(
+                async () => {
+                    const { error } = await supabase
+                        .from('content_creation_plan' as any)
+                        .insert({
+                            user_id: session.user.id,
+                            title: `Idea de: ${item.title}`,
+                            source_video_id: item.id,
+                            source_title: item.title,
+                            source_thumbnail: item.thumbnail,
+                            source_channel: item.channelTitle,
+                            status: 'idea',
+                            ai_suggestions: `Inspirado en viral del canal ${item.channelTitle} (${Number(item.views).toLocaleString()} vistas). Razón: ${item.reason}`
+                        });
+
+                    if (error) throw error;
+                },
+                {
+                    loading: 'Guardando en tu Plan de Contenidos...',
+                    success: '¡Guardado! La IA puede generar el guion ahora.',
+                    error: 'Error al guardar. Intenta de nuevo.'
+                }
+            );
+
+        } catch (e) {
+            console.error("Add Plan Error:", e);
+            toast.error("Error desconocido al guardar");
+        }
     };
 
     return (

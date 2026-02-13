@@ -76,9 +76,10 @@ export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMo
             if (res.source === 'cache') toast.info("Resultados cacheados (Top 5 hoy)");
         } else {
             if (isMounted.current) {
-                const errorMsg = res?.error || "Error de conexión desconocido";
+                console.error("Morning Ops Error:", res);
+                const errorMsg = res?.error || res?.message || (typeof res === 'string' ? res : "Error de conexión desconocido");
                 setError(errorMsg);
-                toast.error("No pudimos cargar las oportunidades: " + errorMsg);
+                // toast.error("No pudimos cargar las oportunidades: " + errorMsg); // Toast might be spammy if on load
             }
         }
         if (isMounted.current) setLoading(false);

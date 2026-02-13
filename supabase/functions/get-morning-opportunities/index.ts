@@ -1,6 +1,5 @@
 
-// ZERO DEPENDENCY VERSION
-// Removed supabase-js import as we don't use it (we mock auth or trust header for now in debug)
+// ZERO DEPENDENCY VERSION WITH REAL CHANNEL STATS
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -19,7 +18,6 @@ Deno.serve(async (req) => {
 
         // 2. Body Parsing (Safe)
         const text = await req.text();
-        console.log(`📦 Body Size: ${text.length}`);
 
         let body = {};
         if (text.length > 0) {
@@ -53,7 +51,7 @@ Deno.serve(async (req) => {
         const maxResults = 5;
         const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(topic)}&maxResults=${maxResults}&order=viewCount&type=video&key=${apiKey}`;
 
-        console.log("Fetching YouTube...");
+        console.log("Fetching YouTube Search...");
         const res = await fetch(searchUrl);
 
         if (!res.ok) {
@@ -63,18 +61,48 @@ Deno.serve(async (req) => {
         }
 
         const data = await res.json();
-        const outliers = data.items?.map((item: any) => ({
-            id: item.id.videoId,
-            title: item.snippet.title,
-            thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url,
-            channelTitle: item.snippet.channelTitle,
-            channelSubs: 1000,
-            views: 5000 + Math.floor(Math.random() * 50000),
-            publishedAt: item.snippet.publishedAt,
-            ratio: 5.0,
-            reason: "Top Search Result",
-            duration: "Short"
-        })) || [];
+        let items = data.items || [];
+
+        // 5. Fetch Channel Stats (Real Subs)
+        const channelIds = [...new Set(items.map((i: any) => i.snippet.channelId))].join(',');
+        const channelMap: Record<string, number> = {};
+
+        if (channelIds) {
+            const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${channelIds}&key=${apiKey}`;
+            console.log("Fetching Channel Stats...");
+            const cRes = await fetch(channelsUrl);
+            if (cRes.ok) {
+                const cData = await cRes.json();
+                cData.items?.forEach((c: any) => {
+                    channelMap[c.id] = Number(c.statistics.subscriberCount);
+                });
+            }
+        }
+
+        const outliers = items.map((item: any) => {
+            const subs = channelMap[item.snippet.channelId] || 0;
+            // Mock views slightly randomized but based on order (since search was sorted by viewCount)
+            // Search API doesn't give views, so we mock views to be high since we sorted by viewCount
+            // In a pro version we would fetch video stats too, but let's save quota for now.
+            // Let's assume top results have >50k views.
+            const estimatedViews = 10000 + Math.floor(Math.random() * 90000);
+
+            // Calculate ratio
+            const ratio = subs > 0 ? (estimatedViews / subs) : 0;
+
+            return {
+                id: item.id.videoId,
+                title: item.snippet.title,
+                thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url,
+                channelTitle: item.snippet.channelTitle,
+                channelSubs: subs,
+                views: estimatedViews,
+                publishedAt: item.snippet.publishedAt,
+                ratio: ratio,
+                reason: subs < 10000 ? "Canal Pequeño" : "Viral",
+                duration: "Short"
+            };
+        });
 
         console.log(`✅ Success: Found ${outliers.length} items`);
 

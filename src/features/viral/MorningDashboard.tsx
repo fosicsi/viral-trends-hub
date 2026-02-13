@@ -31,8 +31,15 @@ const MorningCard = ({ item, onAddPlan }: { item: MorningItem, onAddPlan: (item:
                 <h3 className="font-bold text-sm line-clamp-2 leading-tight group-hover:text-primary transition-colors">{item.title}</h3>
 
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span className="font-medium">{item.channelTitle}</span>
-                    <span>{Number(item.views).toLocaleString()} vistas</span>
+                    <span className="font-medium truncate max-w-[120px]" title={item.channelTitle}>{item.channelTitle}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground border-t border-border/50 pt-2">
+                    <span className="flex items-center gap-1">
+                        <span className="font-bold text-foreground">{Number(item.views).toLocaleString()}</span> views
+                    </span>
+                    <span className="flex items-center gap-1">
+                        <span className="font-bold text-foreground">{Number(item.channelSubs).toLocaleString()}</span> subs
+                    </span>
                 </div>
 
                 <div className="pt-2 border-t border-border/50 flex gap-2">

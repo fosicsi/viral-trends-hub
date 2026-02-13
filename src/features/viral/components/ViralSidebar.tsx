@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type ViralView = "home" | "viral" | "videos" | "saved" | "tools" | "glossary";
+export type ViralView = "home" | "viral" | "videos" | "saved" | "tools" | "glossary" | "search";
 
 interface ViralSidebarProps {
   view: ViralView;

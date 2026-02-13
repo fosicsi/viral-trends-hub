@@ -12,6 +12,7 @@ import { ViralGlossaryView } from "./components/ViralGlossaryView";
 import type { ViralFilters, VideoItem } from "./types";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { MorningDashboard } from "./MorningDashboard"; // Import new Dashboard
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -37,7 +38,7 @@ const VIRAL_TOPICS = [
 export default function ViralApp() {
   const navigate = useNavigate();
   const [session, setSession] = React.useState<any>(null);
-  const [view, setView] = React.useState<ViralView>("home");
+  const [view, setView] = React.useState<ViralView | "search">("home"); // Allow "search" view
   const [query, setQuery] = React.useState<string>("");
   const [selected, setSelected] = React.useState<VideoItem | null>(null);
 
@@ -965,9 +966,11 @@ export default function ViralApp() {
               )}
             </section>
           )}
-          {(view === "viral" || view === "saved" || view === "tools" || view === "glossary") && (
+          {(view === "viral" || view === "search" || view === "saved" || view === "tools" || view === "glossary") && (
             <section className="max-w-6xl mx-auto px-6 md:px-10 py-16 animate-in fade-in">
               {view === "viral" ? (
+                <MorningDashboard onExploreMore={() => setView("search")} />
+              ) : view === "search" ? (
                 <div className="space-y-8">
                   <div className="rounded-[28px] border border-border bg-card p-8 shadow-elev">
                     <div className="space-y-6">

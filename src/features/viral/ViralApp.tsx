@@ -63,7 +63,8 @@ export default function ViralApp() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [aiLoading, setAiLoading] = React.useState(false);
-  const [hasSearched, setHasSearched] = React.useState(false);
+  const [hasVideoSearched, setHasVideoSearched] = React.useState(false);
+  const [hasViralSearched, setHasViralSearched] = React.useState(false);
 
   const [scriptLoading, setScriptLoading] = React.useState(false);
   const [viralPackage, setViralPackage] = React.useState<ViralPackage | null>(null);
@@ -177,7 +178,8 @@ export default function ViralApp() {
   }, [selected]);
 
   const handleResetSearch = () => {
-    setHasSearched(false);
+    setHasVideoSearched(false);
+    setHasViralSearched(false);
     setViralInput("");
     setQuery("");
     setViralResults([]);
@@ -249,7 +251,12 @@ export default function ViralApp() {
       badges.push({ icon: <CheckCircle2 className="w-3 h-3" />, text: "Estable", color: "text-slate-400 bg-slate-400/10" });
     }
     if (viewsPerHour > 500) badges.push({ icon: <Flame className="w-3 h-3" />, text: "Muy Viral", color: "text-orange-500 bg-orange-500/10" });
-    if (v.growthRatio > 10) badges.push({ icon: <AlertCircle className="w-3 h-3" />, text: "Outlier", color: "text-red-400 bg-red-400/10" });
+    if (v.growthRatio > 10) {
+      badges.push({ icon: <AlertCircle className="w-3 h-3" />, text: "OUTLIER", color: "text-red-400 bg-red-400/10" });
+      verdict = "🚨 OUTLIER TOTAL";
+      verdictColor = "text-red-500";
+      verdictBg = "bg-red-500/10 border-red-500/50";
+    }
     return { ageLabel: getRelativeTime(v.publishedAt), viewsPerHour, score, verdict, verdictColor, verdictBg, badges, ratio: v.growthRatio };
   }, []);
 
@@ -271,7 +278,13 @@ export default function ViralApp() {
     const targetSetResults = isViral ? setViralResults : setLiveResults;
     const targetSetError = isViral ? setViralError : setError;
     const targetSetLoading = isViral ? setViralLoading : setLoading;
-    setHasSearched(true);
+    // Set the specific search state
+    if (isViral) {
+      setHasViralSearched(true);
+    } else {
+      setHasVideoSearched(true);
+    }
+
     if (!q.trim()) return;
     targetSetLoading(true);
     targetSetError(null);
@@ -305,6 +318,29 @@ export default function ViralApp() {
   };
 
   const handleTagClick = (tag: string) => { setQuery(tag); setView("videos"); handleSearchGeneric(tag, filters, false); };
+
+  const handleOutlierSearch = () => {
+    const aggressiveFilters: ViralFilters = {
+      minViews: 1000,
+      maxSubs: 10000,
+      minRatio: 10,
+      date: "month",
+      type: "short",
+      order: "relevance"
+    };
+    setViralFilters(aggressiveFilters);
+    const q = viralInput || "curiosidades";
+    setViralInput(q);
+    setViralTopic(q);
+    // setView("viral"); // This might cause a loop if not careful, but let's see. logic was: setView("viral")
+    setView("viral");
+    handleSearchGeneric(q, aggressiveFilters, true);
+    // toast.success("Modo Outlier Activado"); // toast needs import or use generic alert for now?
+    // Using alert for now as I don't see 'sonner' or 'toast' in imports.
+    // Actually, I saw 'alert' being used in handleGenerateScript.
+    // But a toast is better. Let's see if we can import toast.
+    // I'll stick to no toast for now to avoid import errors, or check imports.
+  };
 
   React.useEffect(() => {
     if (aiCriteria) return;
@@ -423,7 +459,9 @@ export default function ViralApp() {
                     Deja de perder horas grabando. Nuestra IA detecta nichos rentables en <strong>YouTube</strong> que funcionan perfectamente para <strong>TikTok</strong> y <strong>Reels</strong>.
                   </motion.p>
 
-                  {/* QUICK START CARDS (Inpirado en Webflow/Notion) */}
+
+
+                  {/* QUICK START CARDS (Inspirado en Webflow/Notion) */}
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -431,11 +469,11 @@ export default function ViralApp() {
                     className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto pt-4"
                   >
                     {[
-                      { icon: <Zap className="w-5 h-5" />, title: "Inspiración IA", desc: "Nichos detectados por nuestra IA.", color: "text-amber-500 bg-amber-500/10", border: "border-amber-500/20" },
-                      { icon: <BarChart3 className="w-5 h-5" />, title: "Análisis Real", desc: "Datos de valles y picos de tendencia.", color: "text-blue-500 bg-blue-500/10", border: "border-blue-500/20" },
-                      { icon: <Wand2 className="w-5 h-5" />, title: "Kit Viral", desc: "Guiones y prompts listos para usar.", color: "text-purple-500 bg-purple-500/10", border: "border-purple-500/20" },
+                      { icon: <Zap className="w-5 h-5" />, title: "Inspiración IA", desc: "Nichos detectados por nuestra IA.", color: "text-amber-500 bg-amber-500/10", border: "border-amber-500/20", action: handleAiViral },
+                      { icon: <Flame className="w-5 h-5" />, title: "Detector de Outliers", desc: "Videos con 10x más vistas que subs.", color: "text-red-500 bg-red-500/10", border: "border-red-500/20", action: handleOutlierSearch },
+                      { icon: <Wand2 className="w-5 h-5" />, title: "Kit Viral", desc: "Guiones y prompts listos para usar.", color: "text-purple-500 bg-purple-500/10", border: "border-purple-500/20", action: () => setView("saved") },
                     ].map((card, i) => (
-                      <div key={i} className={`p-4 rounded-2xl border ${card.border} bg-white/50 dark:bg-slate-900/50 backdrop-blur-md flex flex-col items-center text-center group cursor-pointer hover:scale-105 hover:bg-white dark:hover:bg-slate-900 transition-all shadow-sm hover:shadow-xl`}>
+                      <div key={i} onClick={card.action} className={`p-4 rounded-2xl border ${card.border} bg-white/50 dark:bg-slate-900/50 backdrop-blur-md flex flex-col items-center text-center group cursor-pointer hover:scale-105 hover:bg-white dark:hover:bg-slate-900 transition-all shadow-sm hover:shadow-xl`}>
                         <div className={`p-2 rounded-xl ${card.color} mb-3 group-hover:scale-110 transition-transform`}>{card.icon}</div>
                         <h4 className="font-bold text-sm mb-1 text-slate-900 dark:text-white">{card.title}</h4>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">{card.desc}</p>
@@ -909,7 +947,7 @@ export default function ViralApp() {
                 </div>
               )}
 
-              {!loading && !error && hasSearched && liveResults.length === 0 && <EmptyState onRetry={() => setShowFilters(true)} />}
+              {!loading && !error && hasVideoSearched && liveResults.length === 0 && <EmptyState onRetry={() => setShowFilters(true)} />}
 
               {!loading && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -947,7 +985,7 @@ export default function ViralApp() {
                     </div>
                   </div>
 
-                  {!viralLoading && hasSearched && viralResults.length === 0 && <EmptyState onRetry={() => setShowViralFilters(true)} />}
+                  {!viralLoading && hasViralSearched && viralResults.length === 0 && <EmptyState onRetry={() => setShowViralFilters(true)} />}
 
                   {!viralLoading && viralResults.length > 0 && (
                     <>

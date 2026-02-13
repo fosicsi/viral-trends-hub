@@ -391,7 +391,170 @@ Deno.serve(async (req) => {
             }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
         }
 
-        // 6. REPORTS (YouTube Analytics) - Cache-First Strategy
+        // 6. VIDEOS (YouTube Data API) - Fetch channel videos
+        if (action === 'videos') {
+            const platform = body.platform || 'google';
+            const maxResults = body.maxResults || 10; // Default 10 videos
+            const order = body.order || 'date'; // 'date', 'viewCount', 'rating'
+
+            const supabaseAdmin = createClient(
+                Deno.env.get('SUPABASE_URL') ?? '',
+                Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+            );
+
+            // 1. CHECK CACHE FIRST (cache videos for 1 hour)
+            console.log(`[videos] Checking cache for user ${user.id}, maxResults: ${maxResults}`);
+            const cacheKey = `videos_${maxResults}_${order}`;
+            const { data: cachedVideos, error: cacheError } = await supabaseAdmin
+                .from('youtube_analytics_cache')
+                .select('data, fetched_at')
+                .eq('user_id', user.id)
+                .eq('data_type', cacheKey)
+                .is('date_range', null)
+                .gte('expires_at', new Date().toISOString())
+                .single();
+
+            if (cachedVideos && !cacheError) {
+                console.log(`[videos] Cache HIT for user ${user.id}`);
+                return new Response(JSON.stringify({
+                    videos: cachedVideos.data,
+                    cached: true,
+                    fetchedAt: cachedVideos.fetched_at
+                }), {
+                    headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            console.log(`[videos] Cache MISS for user ${user.id}, fetching from YouTube API`);
+
+            // 2. Fetch from YouTube Data API if cache miss
+            const { data: integration, error: dbError } = await supabaseAdmin
+                .from('user_integrations')
+                .select('access_token, refresh_token, expires_at, platform')
+                .eq('user_id', user.id)
+                .in('platform', [platform, 'google', 'youtube'])
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (dbError || !integration) {
+                return new Response(JSON.stringify({ error: "Not connected" }), { status: 404, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+            }
+
+            const encryptionKey = Deno.env.get("OAUTH_ENCRYPTION_KEY") || "default-insecure-key";
+            let accessToken = await decrypt(integration.access_token, encryptionKey);
+
+            // TOKEN REFRESH LOGIC (same as stats)
+            const expiresAt = integration.expires_at ? new Date(integration.expires_at) : new Date(0);
+            const now = new Date();
+
+            if (expiresAt.getTime() - now.getTime() < 300 * 1000) {
+                console.log("[videos] Token expired or expiring soon. Refreshing...");
+
+                if (!integration.refresh_token) {
+                    return new Response(JSON.stringify({ error: "Token expired and no refresh token" }), { status: 401, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+                }
+
+                const refreshToken = await decrypt(integration.refresh_token, encryptionKey);
+                const clientId = Deno.env.get("GOOGLE_CLIENT_ID");
+                const clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
+
+                const refreshRes = await fetch("https://oauth2.googleapis.com/token", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: new URLSearchParams({
+                        client_id: clientId!,
+                        client_secret: clientSecret!,
+                        refresh_token: refreshToken,
+                        grant_type: "refresh_token",
+                    }),
+                });
+
+                const refreshData = await refreshRes.json();
+                if (!refreshData.access_token) {
+                    return new Response(JSON.stringify({ error: "Token refresh failed" }), { status: 401, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+                }
+
+                accessToken = refreshData.access_token;
+
+                // Update DB with new token
+                const newExpiresAt = new Date(Date.now() + (refreshData.expires_in || 3600) * 1000);
+                await supabaseAdmin.from('user_integrations').update({
+                    access_token: await encrypt(accessToken, encryptionKey),
+                    expires_at: newExpiresAt.toISOString(),
+                }).eq('user_id', user.id).eq('platform', integration.platform);
+            }
+
+            // 3. FETCH VIDEOS from YouTube Data API v3
+            // First get channel ID
+            const channelRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&mine=true`, {
+                headers: { Authorization: `Bearer ${accessToken}` }
+            });
+
+            const channelData = await channelRes.json();
+            if (channelData.error || !channelData.items || channelData.items.length === 0) {
+                console.error("[videos] Channel fetch error:", channelData.error);
+                return new Response(JSON.stringify({ error: "Failed to fetch channel", details: channelData.error }), {
+                    status: channelRes.status,
+                    headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            const channelId = channelData.items[0].id;
+
+            // Now fetch videos using search endpoint
+            const videosRes = await fetch(
+                `https://www.googleapis.com/youtube/v3/search?` +
+                `part=snippet&channelId=${channelId}&type=video&order=${order}&maxResults=${maxResults}`,
+                { headers: { Authorization: `Bearer ${accessToken}` } }
+            );
+
+            const videosData = await videosRes.json();
+            if (videosData.error) {
+                console.error("[videos] Videos fetch error:", videosData.error);
+                return new Response(JSON.stringify({ error: "Failed to fetch videos", details: videosData.error }), {
+                    status: videosRes.status,
+                    headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            // Extract video IDs and fetch full details (to get duration, stats, etc.)
+            const videoIds = videosData.items.map((item: any) => item.id.videoId).join(',');
+
+            const videoDetailsRes = await fetch(
+                `https://www.googleapis.com/youtube/v3/videos?` +
+                `part=snippet,contentDetails,statistics&id=${videoIds}`,
+                { headers: { Authorization: `Bearer ${accessToken}` } }
+            );
+
+            const videoDetailsData = await videoDetailsRes.json();
+            if (videoDetailsData.error) {
+                console.error("[videos] Video details fetch error:", videoDetailsData.error);
+                return new Response(JSON.stringify({ error: "Failed to fetch video details", details: videoDetailsData.error }), {
+                    status: videoDetailsRes.status,
+                    headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            // 4. CACHE THE RESULT (1 hour TTL)
+            const cacheExpiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+            await supabaseAdmin.from('youtube_analytics_cache').upsert({
+                user_id: user.id,
+                data_type: cacheKey,
+                date_range: null,
+                data: videoDetailsData.items,
+                fetched_at: now.toISOString(),
+                expires_at: cacheExpiresAt.toISOString()
+            }, { onConflict: 'user_id,data_type,date_range' });
+
+            return new Response(JSON.stringify({
+                videos: videoDetailsData.items,
+                cached: false,
+                fetchedAt: now.toISOString()
+            }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        }
+
+        // 7. REPORTS (YouTube Analytics) - Cache-First Strategy
         if (action === 'reports' || action === 'get_reports') {
             const platform = body.platform || 'google';
             const { startDate, endDate, dimensions, metrics, reportType } = body;
@@ -406,12 +569,18 @@ Deno.serve(async (req) => {
             );
 
             // Determine the date range for cache key
-            // Calculate which date range this corresponds to
+            // FIXED: Instead of approximating the range from diff days, we calculate CANONICAL dates
+            // This ensures:
+            // 1. Each range (7d, 28d, etc.) always uses consistent start/end dates
+            // 2. Cache invalidates naturally when the day changes
+            // 3. No overlap between different ranges
+
             const calculateRangeKey = (start: string, end: string): string | null => {
                 const startDate = new Date(start);
                 const endDate = new Date(end);
                 const diffDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 
+                // Map to closest standard range
                 if (diffDays <= 8) return '7d';
                 if (diffDays <= 30) return '28d';
                 if (diffDays <= 95) return '90d';
@@ -419,11 +588,43 @@ Deno.serve(async (req) => {
                 return 'all';
             };
 
+            // Calculate the canonical startDate and endDate for this range
+            // This ensures that cache entries for the same "logical range" (e.g., "7d") 
+            // always map to the same dates (e.g., "2026-02-03 to 2026-02-10")
+            const getCanonicalDates = (rangeKey: string): { start: string, end: string } => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0); // Normalize to start of day
+
+                const endDate = new Date(today);
+                const startDate = new Date(today);
+
+                switch (rangeKey) {
+                    case '7d': startDate.setDate(today.getDate() - 7); break;
+                    case '28d': startDate.setDate(today.getDate() - 28); break;
+                    case '90d': startDate.setDate(today.getDate() - 90); break;
+                    case '365d': startDate.setDate(today.getDate() - 365); break;
+                    case 'all':
+                        // FIXED: Use first day of first month to align with 'month' dimension requirement
+                        startDate.setFullYear(2005, 0, 1); // Jan 1, 2005 (YouTube launch)
+                        break;
+                }
+
+                return {
+                    start: startDate.toISOString().split('T')[0],
+                    end: endDate.toISOString().split('T')[0]
+                };
+            };
+
             const dateRangeKey = calculateRangeKey(startDate, endDate);
+            const canonicalDates = dateRangeKey ? getCanonicalDates(dateRangeKey) : null;
+
+            // Use canonical dates for cache lookup
+            // This ensures that requests for "last 7 days" on different times of the same day
+            // all hit the same cache entry
             const cacheDataType = reportType || 'reports';
 
-            // 1. CHECK CACHE FIRST
-            console.log(`[reports] Checking cache for user ${user.id}, type: ${cacheDataType}, range: ${dateRangeKey}`);
+            // 1. CHECK CACHE FIRST (using canonical dates)
+            console.log(`[reports] Checking cache for user ${user.id}, type: ${cacheDataType}, range: ${dateRangeKey}, canonical: ${canonicalDates?.start} to ${canonicalDates?.end}`);
             const { data: cachedReport, error: cacheError } = await supabaseAdmin
                 .from('youtube_analytics_cache')
                 .select('data, fetched_at')
@@ -507,7 +708,7 @@ Deno.serve(async (req) => {
             }
 
             // Define metrics and dimensions based on reportType
-            let reportMetrics = metrics || 'views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained';
+            let reportMetrics = metrics || 'views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost';
             let reportDims = dimensions || 'day';
             let sort = 'day';
 
@@ -521,16 +722,22 @@ Deno.serve(async (req) => {
                 sort = '-views';
             }
 
+            // FIXED: Use canonical dates for the YouTube API call, not the frontend-provided dates
+            // This ensures that all requests for "7d" on the same day fetch the SAME data
+            // and can share the same cache entry
+            const apiStartDate = canonicalDates?.start || startDate;
+            const apiEndDate = canonicalDates?.end || endDate;
+
             const queryParams = new URLSearchParams({
                 ids: 'channel==MINE',
-                startDate: startDate,
-                endDate: endDate,
+                startDate: apiStartDate,
+                endDate: apiEndDate,
                 metrics: reportMetrics,
                 dimensions: reportDims,
                 sort: sort
             });
 
-            console.log(`[get_reports] Fetching with params: ${queryParams.toString()}`);
+            console.log(`[get_reports] Fetching with canonical params: ${queryParams.toString()}`);
 
             const ytRes = await fetch(
                 `https://youtubeanalytics.googleapis.com/v2/reports?${queryParams.toString()}`,

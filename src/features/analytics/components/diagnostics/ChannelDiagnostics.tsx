@@ -1,6 +1,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ThumbsUp, ThumbsDown, TrendingUp, AlertTriangle } from "lucide-react";
+import { DiagnosticPattern } from "@/features/analytics/utils/diagnosticEngine";
 
 interface PatternItemProps {
     title: string;
@@ -21,7 +22,12 @@ function PatternItem({ title, description, type }: PatternItemProps) {
     );
 }
 
-export function ChannelDiagnostics() {
+interface ChannelDiagnosticsProps {
+    positivePatterns: DiagnosticPattern[];
+    negativePatterns: DiagnosticPattern[];
+}
+
+export function ChannelDiagnostics({ positivePatterns, negativePatterns }: ChannelDiagnosticsProps) {
     return (
         <div className="grid gap-4 md:grid-cols-2">
             <Card>
@@ -32,16 +38,14 @@ export function ChannelDiagnostics() {
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                    <PatternItem
-                        type="positive"
-                        title="Intros de Alta Energía"
-                        description="Videos que empiezan con pregunta o conflicto retienen 15% más audiencia."
-                    />
-                    <PatternItem
-                        type="positive"
-                        title="Formato de Listas"
-                        description="'Top 10' o 'Lo Mejor de' tienen 20% más CTR que tutoriales."
-                    />
+                    {positivePatterns.slice(0, 2).map((pattern, idx) => (
+                        <PatternItem
+                            key={idx}
+                            type="positive"
+                            title={pattern.title}
+                            description={pattern.description}
+                        />
+                    ))}
                 </CardContent>
             </Card>
 
@@ -53,16 +57,14 @@ export function ChannelDiagnostics() {
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                    <PatternItem
-                        type="negative"
-                        title="Outros Silenciosas"
-                        description="La gente se va al oír 'Gracias por ver'. Conecta al siguiente video en su lugar."
-                    />
-                    <PatternItem
-                        type="negative"
-                        title="Miniaturas Genéricas"
-                        description="Miniaturas sin cara o emoción rinden 40% por debajo del promedio."
-                    />
+                    {negativePatterns.slice(0, 2).map((pattern, idx) => (
+                        <PatternItem
+                            key={idx}
+                            type="negative"
+                            title={pattern.title}
+                            description={pattern.description}
+                        />
+                    ))}
                 </CardContent>
             </Card>
         </div>

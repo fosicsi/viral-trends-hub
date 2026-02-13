@@ -1,7 +1,7 @@
 import { MetricCard } from "../components/MetricCard";
 import { TimeRangeSelector, TimeRange } from "../components/common/TimeRangeSelector";
 import { ChartContainer } from "../components/ChartContainer";
-import { Eye, Users, TrendingUp } from "lucide-react";
+import { Eye, Users, TrendingUp, DollarSign, Sparkles } from "lucide-react";
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import { CTRCard } from "../components/key-metrics/CTRCard";
 import { RetentionChart } from "../components/key-metrics/RetentionChart";
@@ -14,6 +14,9 @@ import { CCNTrendsChart } from "../components/strategy/CCNTrendsChart";
 import { VideoDiagnosisCard } from "../components/diagnostics/VideoDiagnosisCard";
 import { ActionPlan } from "../components/diagnostics/ActionPlan";
 import { ChannelDiagnostics } from "../components/diagnostics/ChannelDiagnostics";
+import { analyzeDiagnostics, detectPatterns, ChannelMetrics } from "@/features/analytics/utils/diagnosticEngine";
+import { analyzeLastVideo, LastVideoAnalysis } from "../utils/lastVideoAnalysis";
+import { LastVideoPerformance } from "../components/diagnostics/LastVideoPerformance";
 import { TrafficDistributionChart } from "../components/traffic/TrafficDistributionChart";
 import { TrafficSourceBreakdown } from "../components/traffic/TrafficSourceBreakdown";
 import { TrafficInsights } from "../components/traffic/TrafficInsights";
@@ -33,6 +36,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { integrationsApi } from "@/lib/api/integrations";
 import { AnalyticsSkeleton } from "../components/placeholders/AnalyticsSkeleton";
 import { useYouTubeData } from "../hooks/useYouTubeData";
+import AIRecommendationsView from "./AIRecommendationsView";
+import { useChannelHealth } from "../hooks/useChannelHealth";
 
 // Mock data for initial visualization
 const data = [
@@ -97,32 +102,37 @@ function formatTimeAgo(timestamp: string): string {
     return `hace ${diffDays} día${diffDays > 1 ? 's' : ''}`;
 }
 
-
-
 export default function AnalyticsDashboard() {
     const {
         views, subscribers, videos, isConnected, isDemo, loading, error, connect,
         dateRange, setDateRange, reportData, reportLoading, trafficData, audienceData,
-        lastFetchedAt, isCached
+        lastFetchedAt, isCached, recentVideosCCN
     } = useYouTubeData();
+
+    // Hook integration
+    const channelHealth = useChannelHealth(reportData, recentVideosCCN, reportLoading);
+
+    // Last video analysis state
+    const [lastVideoAnalysis, setLastVideoAnalysis] = useState<LastVideoAnalysis | null>(null);
+    const [isAnalyzingVideo, setIsAnalyzingVideo] = useState(false);
     const navigate = useNavigate();
 
-    // DEBUG STATE
-    const [debugIntegrations, setDebugIntegrations] = useState<any>(null);
-    const [debugLoading, setDebugLoading] = useState(true);
-    const [debugError, setDebugError] = useState<string | null>(null);
-
+    // Analyze last video when connected
     useEffect(() => {
-        integrationsApi.getStatus()
-            .then(res => {
-                setDebugIntegrations(res);
-                setDebugLoading(false);
-            })
-            .catch(err => {
-                setDebugError(err.message);
-                setDebugLoading(false);
-            });
-    }, []);
+        if (isConnected && !isDemo) {
+            setIsAnalyzingVideo(true);
+            analyzeLastVideo()
+                .then(analysis => {
+                    setLastVideoAnalysis(analysis);
+                })
+                .catch(err => {
+                    console.error('Error analyzing last video:', err);
+                })
+                .finally(() => {
+                    setIsAnalyzingVideo(false);
+                });
+        }
+    }, [isConnected, isDemo]);
 
     if (loading) {
         return <AnalyticsSkeleton />;
@@ -137,25 +147,74 @@ export default function AnalyticsDashboard() {
     let currentWatchTimeHours = 0;
     let currentAVD = "0:00";
     let currentRetention = 0;
+    let currentRevenue = 0;
 
     // Metrics: views (1), estMinWatched (2), avgViewDur (3), avgViewPct (4), subsGained (5)
 
     if (reportData && reportData.rows) {
-        const totalViews = reportData.rows.reduce((acc: number, row: any[]) => acc + (Number(row[1]) || 0), 0);
-        const totalWatchTimeMin = reportData.rows.reduce((acc: number, row: any[]) => acc + (Number(row[2]) || 0), 0);
-        const totalSubs = reportData.rows.reduce((acc: number, row: any[]) => acc + (Number(row[5]) || 0), 0);
+        // Dynamic column mapping. If not found, index is -1.
+        const headers = reportData.columnHeaders || [];
 
-        // Weighted Retention (col 4) * views / totalViews
-        const weightedRetention = totalViews > 0 ? reportData.rows.reduce((acc: number, row: any[]) => acc + ((Number(row[4]) || 0) * (Number(row[1]) || 0)), 0) / totalViews : 0;
+        const viewsIdx = headers.findIndex((h: any) => h.name === 'views');
+        const watchTimeIdx = headers.findIndex((h: any) => h.name === 'estimatedMinutesWatched');
+        const subsIdx = headers.findIndex((h: any) => h.name === 'subscribersGained');
+        const revenueIdx = headers.findIndex((h: any) => h.name === 'estimatedRevenue');
+        const retentionIdx = headers.findIndex((h: any) => h.name === 'averageViewPercentage');
+        const subsLostIdx = headers.findIndex((h: any) => h.name === 'subscribersLost');
+
+        // Helper to safely sum a column. If idx is -1, returns 0.
+        const sumColumn = (idx: number) => {
+            if (idx === -1) return 0;
+            return reportData.rows.reduce((acc: number, row: any[]) => acc + (Number(row[idx]) || 0), 0);
+        };
+
+        const totalViews = sumColumn(viewsIdx);
+        const totalWatchTimeMin = sumColumn(watchTimeIdx);
+        const totalSubsGained = sumColumn(subsIdx);
+        const totalSubsLost = sumColumn(subsLostIdx);
+        const netSubs = totalSubsGained - totalSubsLost;
+
+        let totalRevenue = sumColumn(revenueIdx);
+
+        // SAFETY GUARD: Prevent Revenue Aliasing
+        // If revenue matches views or watch time exactly (or indices collide), it's a data mismatch.
+        if (revenueIdx === viewsIdx || revenueIdx === watchTimeIdx) {
+            console.warn("Revenue index collision detected. Forcing 0.");
+            totalRevenue = 0;
+        }
+
+        // Value-based heuristic check (User reported Revenue ~= Views)
+        // If Revenue is exactly Equal to Views or WatchTime (within small margin), it's likely a column mismatch.
+        // Also, if channel is not monetized, Revenue should be 0.
+        if (totalRevenue > 0) {
+            const isLikelyViews = Math.abs(totalRevenue - totalViews) < 1;
+            const isLikelyWatchTime = Math.abs(totalRevenue - totalWatchTimeMin) < 1;
+
+            if (isLikelyViews || isLikelyWatchTime) {
+                console.warn("Revenue likely incorrectly mapped to Views/WatchTime. Forcing 0.");
+                totalRevenue = 0;
+            }
+        }
+
+        // Weighted Retention * views / totalViews
+        const weightedRetention = totalViews > 0 && retentionIdx !== -1 && viewsIdx !== -1
+            ? reportData.rows.reduce((acc: number, row: any[]) => acc + ((Number(row[retentionIdx]) || 0) * (Number(row[viewsIdx]) || 0)), 0) / totalViews
+            : 0;
 
         // AVD from total duration
         const avgDurationSeconds = totalViews > 0 ? (totalWatchTimeMin * 60) / totalViews : 0;
         const minutes = Math.floor(avgDurationSeconds / 60);
         const seconds = Math.floor(avgDurationSeconds % 60);
 
-        currentViews = totalViews;
-        currentSubs = totalSubs;
+        currentViews = dateRange === 'all' && views > 0 ? views : totalViews; // Use exact stats for 'all' if available
+
+        // For subscribers: 
+        // If 'all' -> show total channel subscribers (from channel stats)
+        // If period -> show net change (gained - lost)
+        currentSubs = dateRange === 'all' ? subscribers : netSubs;
+
         currentWatchTimeHours = Math.round(totalWatchTimeMin / 60);
+        currentRevenue = totalRevenue;
         currentAVD = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         currentRetention = weightedRetention;
 
@@ -175,12 +234,53 @@ export default function AnalyticsDashboard() {
         currentRetention = 0;
     }
 
-    // Use real data if connected, otherwise use mocks or 0
-    const displayViews = isConnected || isDemo ? currentViews.toLocaleString() : "0";
-    const displaySubs = isConnected || isDemo ? currentSubs.toLocaleString() : "0";
-    const displayRetention = isConnected || isDemo ? currentRetention : 0;
-    const displayWatchTime = isConnected || isDemo ? currentWatchTimeHours : 0;
-    const displayAVD = isConnected || isDemo ? currentAVD : "0:00";
+    // Calculate Algorithmic Performance Score (0-100)
+    // Based on YouTube's algorithm priorities:
+    // - Retention (40%): Good retention = >40%, Excellent = >60%
+    // - Watch Time (40%): Relative to content duration
+    // - CTR (20%): Good CTR = >4%, Excellent = >8%
+
+    let algorithmicScore = 0;
+
+    if (isConnected || isDemo) {
+        // Retention component (0-40 points)
+        const retentionScore = Math.min(40, (currentRetention / 60) * 40);
+
+        // Watch Time component (0-40 points)
+        // Normalize based on total views - more watch time relative to views = better
+        const watchTimeScore = currentViews > 0
+            ? Math.min(40, (currentWatchTimeHours / (currentViews / 100)) * 40)
+            : 0;
+
+        // CTR component (0-20 points) - Using 5% as target
+        const ctrScore = Math.min(20, (currentCTR / 5) * 20);
+
+        algorithmicScore = Math.round(retentionScore + watchTimeScore + ctrScore);
+    }
+
+    // FIXED: Show demo/meaningful data even during initial loading state
+    // If not connected AND not explicitly in demo mode yet (loading=true), treat as demo
+    const shouldShowData = isConnected || isDemo || loading;
+
+    const displayViews = shouldShowData ? currentViews.toLocaleString() : "0";
+    const displaySubs = shouldShowData ? currentSubs.toLocaleString() : "0";
+    const displayRetention = shouldShowData ? currentRetention : 0;
+    const displayWatchTime = shouldShowData ? currentWatchTimeHours : 0;
+    const displayAVD = shouldShowData ? currentAVD : "0:00";
+
+    // DIAGNOSTICS: Analyze metrics and generate issues/patterns
+    const diagnosticMetrics: ChannelMetrics = {
+        retention: currentRetention,
+        ctr: currentCTR,
+        watchTimeHours: currentWatchTimeHours,
+        totalViews: currentViews,
+        subscriberGrowth: currentSubs,
+        avgViewDuration: currentAVD,
+        dateRange: dateRange
+    };
+
+    const diagnosticIssues = analyzeDiagnostics(diagnosticMetrics);
+    const { positive: positivePatterns, negative: negativePatterns } = detectPatterns(diagnosticMetrics);
 
     return (
         <div className="p-8 space-y-8">
@@ -233,10 +333,16 @@ export default function AnalyticsDashboard() {
                 <TabsList>
                     <TabsTrigger value="overview">Resumen</TabsTrigger>
                     <TabsTrigger value="strategy">Estrategia (CCN)</TabsTrigger>
-                    <TabsTrigger value="diagnostics">Diagnóstico IA (F1)</TabsTrigger>
+                    <TabsTrigger value="diagnostics">Diagnóstico IA</TabsTrigger>
                     <TabsTrigger value="traffic">Fuentes de Tráfico</TabsTrigger>
-                    <TabsTrigger value="business">Negocio y Crecimiento</TabsTrigger>
+                    {currentRevenue > 0 && (
+                        <TabsTrigger value="business">Negocio (RPM)</TabsTrigger>
+                    )}
                     <TabsTrigger value="benchmarking">Competencia</TabsTrigger>
+                    <TabsTrigger value="ai-recommendations" className="gap-2">
+                        <Sparkles className="w-3 h-3 text-purple-500" />
+                        Estrategia IA
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="overview" className="space-y-4">
@@ -244,17 +350,24 @@ export default function AnalyticsDashboard() {
                     {/* Key Metrics "Holy Trinity" + Overview */}
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                         <MetricCard
+                            title="Ingresos Totales"
+                            value={reportLoading ? "..." : `$${currentRevenue.toFixed(2)}`}
+                            trend={20.1}
+                            trendLabel={dateRange === 'all' ? "total histórico" : "en este periodo"}
+                            icon={<DollarSign className="h-4 w-4" />}
+                        />
+                        <MetricCard
                             title="Retención Promedio"
                             value={`${reportLoading ? "..." : displayRetention.toFixed(1)}%`}
                             trend={0}
-                            trendLabel="del video visto (Engagement)"
+                            trendLabel="del video visto en promedio"
                             icon={<TrendingUp className="h-4 w-4" />}
                         />
 
                         <WatchTimeCard
                             totalHours={displayWatchTime}
                             averageViewDuration={displayAVD as string}
-                            algorithmicScore={0}
+                            algorithmicScore={algorithmicScore}
                         />
 
                         <MetricCard
@@ -272,6 +385,10 @@ export default function AnalyticsDashboard() {
                             trendLabel={dateRange === 'all' ? "total histórico" : "en este periodo"}
                             icon={<Users className="h-4 w-4" />}
                         />
+
+                        <div className="md:col-span-2 lg:col-span-1 lg:row-span-2">
+                            <ChannelHealthIndicator metrics={channelHealth} />
+                        </div>
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
@@ -323,43 +440,39 @@ export default function AnalyticsDashboard() {
                     </div>
                 </TabsContent>
 
-                <TabsContent value="diagnostics" className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-12">
-                        {/* Left Column: Video Analysis & Channel Patterns */}
-                        <div className="md:col-span-8 space-y-4">
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <VideoDiagnosisCard
-                                    videoTitle="Why React 19 Will Change Everything (Must Watch)"
-                                    hookScore={45} // Low, needs fix
-                                    packagingScore={88} // High
-                                    promiseScore={70} // Avg
-                                />
-                                <VideoDiagnosisCard
-                                    videoTitle="10 CSS Tricks You Didn't Know"
-                                    hookScore={78}
-                                    packagingScore={65}
-                                    promiseScore={90}
-                                />
-                            </div>
-                            <ChannelDiagnostics />
+                <TabsContent value="diagnostics">
+                    <div className="grid md:grid-cols-12 gap-6">
+                        <div className="md:col-span-12">
+                            <LastVideoPerformance analysis={lastVideoAnalysis} isLoading={isAnalyzingVideo} />
                         </div>
 
-                        {/* Right Column: Action Plan */}
-                        <div className="md:col-span-4">
-                            <ActionPlan />
+                        <div className="md:col-span-7 space-y-4">
+                            {lastVideoAnalysis && (
+                                <VideoDiagnosisCard
+                                    hookScore={lastVideoAnalysis.scores.hook}
+                                    packagingScore={lastVideoAnalysis.scores.packaging}
+                                    payoffScore={lastVideoAnalysis.scores.payoff}
+                                />
+                            )}
+                            <ChannelDiagnostics
+                                positivePatterns={positivePatterns}
+                                negativePatterns={negativePatterns}
+                            />
+                        </div>
+
+                        <div className="md:col-span-5">
+                            <ActionPlan issues={diagnosticIssues} />
                         </div>
                     </div>
                 </TabsContent>
 
                 <TabsContent value="traffic" className="space-y-4">
                     <div className="grid gap-4 md:grid-cols-3">
-                        {/* Left Column: Distribution & Insights */}
                         <div className="space-y-4 col-span-1">
                             <TrafficDistributionChart data={trafficData || []} />
-                            <TrafficInsights />
+                            <TrafficInsights data={trafficData || []} />
                         </div>
 
-                        {/* Right Column: Detailed Breakdown */}
                         <div className="col-span-1 md:col-span-2">
                             <TrafficSourceBreakdown data={trafficData || []} />
                         </div>
@@ -369,43 +482,29 @@ export default function AnalyticsDashboard() {
                 <TabsContent value="business" className="space-y-4">
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                         <ProfitabilityCard
-                            rpm={4.50}
-                            cpm={12.00}
-                            estimatedMonthlyRevenue={12500}
+                            rpm={currentViews > 0 ? (currentRevenue / currentViews) * 1000 : 0}
+                            cpm={currentViews > 0 ? ((currentRevenue / currentViews) * 1000) / 0.55 : 0}
+                            estimatedMonthlyRevenue={currentRevenue}
                         />
-                        <SessionAnalysisCard
-                            avgVideosPerSession={2.4}
-                            viewsPerUniqueViewer={1.8}
-                            bingePotentialScore={85}
-                        />
-                        <ChannelHealthIndicator />
-                        <div className="md:col-span-2 lg:col-span-1">
-                            {/* Growth Chart matches height of other cards */}
-                            <GrowthVelocityChart data={[
-                                { date: 'W1', subSpeed: 12, retention: 80 },
-                                { date: 'W2', subSpeed: 15, retention: 75 },
-                                { date: 'W3', subSpeed: 18, retention: 82 },
-                                { date: 'W4', subSpeed: 14, retention: 78 },
-                                { date: 'W5', subSpeed: 22, retention: 85 },
-                            ]} />
-                        </div>
                     </div>
                 </TabsContent>
 
                 <TabsContent value="benchmarking" className="space-y-4">
                     <div className="grid gap-4 md:grid-cols-12">
-                        {/* Left Column: Score & Benchmarks */}
                         <div className="col-span-1 md:col-span-4 space-y-4">
                             <ChannelScorecard />
                             <NicheBenchmarkCard />
                         </div>
 
-                        {/* Right Column: Competitors & History */}
                         <div className="col-span-1 md:col-span-8 space-y-4">
                             <HistoryComparisonChart />
                             <CompetitorTable />
                         </div>
                     </div>
+                </TabsContent>
+
+                <TabsContent value="ai-recommendations">
+                    <AIRecommendationsView />
                 </TabsContent>
             </Tabs>
 

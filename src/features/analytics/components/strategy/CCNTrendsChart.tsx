@@ -47,9 +47,9 @@ export function CCNTrendsChart({ data }: CCNTrendsChartProps) {
                                 itemStyle={{ color: '#fff' }}
                             />
                             <Legend />
-                            <Area type="monotone" dataKey="New" stackId="1" stroke="#f97316" fill="url(#colorNew)" />
-                            <Area type="monotone" dataKey="Casual" stackId="1" stroke="#22c55e" fill="url(#colorCasual)" />
-                            <Area type="monotone" dataKey="Core" stackId="1" stroke="#3b82f6" fill="url(#colorCore)" />
+                            <Area type="monotone" dataKey="New" stackId="1" stroke="#f97316" fill="url(#colorNew)" name="Nuevos (Discovery)" />
+                            <Area type="monotone" dataKey="Casual" stackId="1" stroke="#22c55e" fill="url(#colorCasual)" name="Casuales (Browsing)" />
+                            <Area type="monotone" dataKey="Core" stackId="1" stroke="#3b82f6" fill="url(#colorCore)" name="Core (Suscriptores)" />
                         </AreaChart>
                     </ResponsiveContainer>
                 </div>

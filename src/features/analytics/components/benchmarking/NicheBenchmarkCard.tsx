@@ -68,10 +68,10 @@ export function NicheBenchmarkCard() {
                     unit="m"
                 />
                 <BenchmarkMetric
-                    label="Tasa de Engagement"
-                    value={8.5}
-                    avg={5.2}
-                    top10={12.0}
+                    label="Retención Promedio"
+                    value={42.0}  // Will be replaced with real data later
+                    avg={35.2}
+                    top10={52.0}
                     unit="%"
                 />
 

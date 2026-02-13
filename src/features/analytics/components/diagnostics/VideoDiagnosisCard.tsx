@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CheckCircle, HelpCircle } from "lucide-react";
@@ -38,39 +37,38 @@ function DiagnosisScore({ label, score, threshold, description }: DiagnosisScore
 }
 
 interface VideoDiagnosisCardProps {
-    videoTitle: string;
-    hookScore: number; // Retention at 30s
-    packagingScore: number; // CTR
-    promiseScore: number; // Avg View Duration vs Expectations
+    hookScore: number; // 0-100 based on retention
+    packagingScore: number; // 0-100 based on CTR
+    payoffScore: number; // 0-100 based on AVD vs duration
 }
 
-export function VideoDiagnosisCard({ videoTitle, hookScore, packagingScore, promiseScore }: VideoDiagnosisCardProps) {
+export function VideoDiagnosisCard({ hookScore, packagingScore, payoffScore }: VideoDiagnosisCardProps) {
     return (
         <Card className="h-full">
             <CardHeader>
                 <CardTitle className="flex flex-col gap-1">
-                    <span className="text-xs font-normal text-muted-foreground uppercase tracking-wider">Diagnóstico de Último Video</span>
-                    <span className="text-lg leading-tight truncate" title={videoTitle}>{videoTitle}</span>
+                    <span className="text-xs font-normal text-muted-foreground uppercase tracking-wider">Autopsia del Video</span>
+                    <span className="text-lg leading-tight">Scores de Performance</span>
                 </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
                 <DiagnosisScore
-                    label="Eficiencia del Gancho"
+                    label="Gancho (Primeros 30s)"
                     score={hookScore}
                     threshold={60}
-                    description="% de espectadores viendo a los 30s. Menos de 60 significa intro larga o aburrida."
+                    description="Score basado en retención. Menos de 60 significa intro larga o gancho débil."
                 />
                 <DiagnosisScore
-                    label="Empaquetado (CTR)"
+                    label="Packaging (Thumbnail/Título)"
                     score={packagingScore}
-                    threshold={50} // Normalized score, e.g. 5% CTR = 50
-                    description="Fuerza del Click-Through Rate. Si es bajo, tu título o miniatura no generan curiosidad."
+                    threshold={50}
+                    description="Score basado en CTR. Si es bajo, tu título o miniatura no generan curiosidad."
                 />
                 <DiagnosisScore
-                    label="Cumplimiento de Promesa"
-                    score={promiseScore}
+                    label="Payoff (Cumplimiento)"
+                    score={payoffScore}
                     threshold={40}
-                    description="Basado en Duración Promedio. ¿El video entregó lo que prometió el título?"
+                    description="Basado en duración vista vs total. ¿El video entregó lo que prometió el título?"
                 />
             </CardContent>
         </Card>

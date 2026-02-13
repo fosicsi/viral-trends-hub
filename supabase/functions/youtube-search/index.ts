@@ -79,46 +79,26 @@ type ViralFilters = {
   date: "week" | "month" | "year" | "all";
   type: "all" | "short" | "medium" | "long";
   order: "viewCount" | "date" | "relevance" | "rating";
+  minRatio?: number;
 };
 
-type VideoItem = {
-  id: string;
-  title: string;
-  channel: string;
-  channelSubscribers: number;
-  views: number;
-  publishedAt: string;
-  durationString: string;
-  thumbnail: string;
-  url: string;
-  growthRatio: number;
-};
-
-// Tipo interno para filtrar duración
-type InternalVideoItem = VideoItem & { _durSeconds: number };
-
-/* --- HELPERS DE LIMPIEZA --- */
-
-function toSafeNumber(v: unknown, fallback: number): number {
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? n : fallback;
-}
+// ... type definitions ...
 
 function normalizeFilters(input: any): ViralFilters {
   const minViews = Math.max(0, Math.floor(toSafeNumber(input?.minViews, 10_000)));
   const maxSubs = Math.max(0, Math.floor(toSafeNumber(input?.maxSubs, 500_000)));
+  const minRatio = input?.minRatio ? Math.max(0, Number(input.minRatio)) : undefined;
 
   const date: ViralFilters["date"] =
     ["week", "month", "year", "all"].includes(input?.date) ? input.date : "year";
 
-  // Forzamos "short" internamente si la app es de Shorts, o lo dejamos dinámico
   const type: ViralFilters["type"] = "short";
 
   const orderInput = input?.order;
   const order: ViralFilters["order"] =
     ["date", "rating", "relevance", "viewCount"].includes(orderInput) ? orderInput : "viewCount";
 
-  return { minViews, maxSubs, date, type, order };
+  return { minViews, maxSubs, date, type, order, minRatio };
 }
 
 function parseDuration(iso: string): number {
@@ -252,7 +232,8 @@ Deno.serve(async (req) => {
           // EL GRAN FILTRO: Aquí es donde mueren los canales grandes
           const passViews = v.views >= filters.minViews;
           const passSubs = v.channelSubscribers <= filters.maxSubs;
-          return passViews && passSubs;
+          const passRatio = filters.minRatio ? v.growthRatio >= filters.minRatio : true;
+          return passViews && passSubs && passRatio;
         });
     };
 

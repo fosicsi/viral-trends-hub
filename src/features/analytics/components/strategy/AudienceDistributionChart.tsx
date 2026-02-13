@@ -10,10 +10,14 @@ interface AudienceDistributionChartProps {
 
 export function AudienceDistributionChart({ data }: AudienceDistributionChartProps) {
     // Ideal: Core 40%, Casual 35%, New 25%
-    // Simple heuristic: check if any segment is > 50% or < 15%
-    const isUnbalanced = data.some(d => d.value > 50 || d.value < 15);
-    const isHealthy = !isUnbalanced; // New variable for health status
-    const dominantSegment = data.reduce((prev, current) => (prev.value > current.value) ? prev : current);
+    // Segments: Core (Suscriptores), New (Discovery), Casual (Browsing)
+    const isUnbalanced = data.some(d => d.value > 50 || (d.value < 15 && d.value > 0));
+    const isHealthy = !isUnbalanced;
+
+    // Find dominant segment safely
+    const dominantSegment = data.length > 0
+        ? data.reduce((prev, current) => (prev.value > current.value) ? prev : current, data[0])
+        : { name: 'None', value: 0 };
 
     return (
         <Card className="col-span-1">

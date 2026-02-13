@@ -85,10 +85,12 @@ export function useYouTubeData() {
     });
 
     // Report State
-    const [dateRange, setDateRange] = useState<string>('all');
+    const [dateRange, setDateRange] = useState<string>('28d'); // Changed from 'all' to prevent slow initial load
     const [reportData, setReportData] = useState<any>(null);
     const [trafficData, setTrafficData] = useState<any[]>([]);
-    const [audienceData, setAudienceData] = useState<any[]>([]); // New State
+    const [audienceData, setAudienceData] = useState<any[]>([]);
+    const [ccnTrendsData, setCcnTrendsData] = useState<any[]>([]); // New State for Trends
+    const [recentVideosCCN, setRecentVideosCCN] = useState<any[]>([]); // New State for Videos
     const [reportLoading, setReportLoading] = useState<boolean>(false);
 
     // Helpers for Traffic Sources
@@ -134,7 +136,6 @@ export function useYouTubeData() {
         const start = new Date();
 
         switch (range) {
-
             case '7d': start.setDate(end.getDate() - 7); break;
             case '28d': start.setDate(end.getDate() - 28); break;
             case '90d': start.setDate(end.getDate() - 90); break;
@@ -218,36 +219,77 @@ export function useYouTubeData() {
         const fetchReport = async () => {
             if (!data.isConnected || data.isDemo) return;
 
-            // Optimisation: If 'all' (lifetime), we use stats API, so skip report fetch
-            // But if user wants to see graph, we might need it? 
-            // For now, let's skip to avoid freeze. Graph shows "Vistas en el Tiempo" - assumes last 30 days?
-            // Ah, chart uses 'dateRange'? If chart uses reportData, we need reportData.
-            // But 'all' is too big. Let's limit 'all' to last 365 days for graph purposes or handle differently.
-            // We need to fetch it to populate the Chart. We use 'month' dimension below to keep it light.
-            // if (dateRange === 'all') {
-            //    setReportData(null);
-            //    setReportLoading(false);
-            //    return;
-            // }
-
             setReportLoading(true);
             try {
                 const { startDate, endDate } = calculateDateRange(dateRange);
                 console.log(`[YouTubeData] Fetching for range: ${dateRange}`);
-                console.log(`[YouTubeData] Calculated dates: Start=${startDate}, End=${endDate}`);
 
-                // 1. Main Report (Daily/Monthly stats)
-                // specific dimensions based on range
                 let dimension = 'day';
                 if (dateRange === 'all' || dateRange === '365d') {
                     dimension = 'month';
                 }
 
-                console.log(`[YouTubeData] Dimension: ${dimension}`);
-
-                const { report } = await integrationsApi.getReports('youtube', startDate, endDate, dimension);
+                // 1. Main Report & Revenue
+                // Explicitly request metrics WITHOUT revenue to ensure we get full history (no monetization filter)
+                // Overriding backend default.
+                const safeMetrics = 'views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost';
+                const { report } = await integrationsApi.getReports('youtube', startDate, endDate, dimension, safeMetrics);
 
                 if (report?.rows) {
+                    // Sanitize: Remove estimatedRevenue if present in Main Report (it's pollution from bad cache)
+                    // We only want revenue from the separate fetch below.
+                    if (report.columnHeaders) {
+                        const dirtyRevIdx = report.columnHeaders.findIndex((h: any) => h.name === 'estimatedRevenue');
+                        if (dirtyRevIdx !== -1) {
+                            report.columnHeaders.splice(dirtyRevIdx, 1);
+                            report.rows.forEach((row: any[]) => row.splice(dirtyRevIdx, 1));
+                        }
+                    }
+
+                    // Separate Revenue Fetching to avoid data truncation
+                    try {
+                        const { report: revenueReport } = await integrationsApi.getReports(
+                            'youtube',
+                            startDate,
+                            endDate,
+                            dimension, // Match dimension (day or month)
+                            'estimatedRevenue' // Only fetch revenue
+                        );
+
+                        if (revenueReport?.rows) {
+                            // Create a map of Date -> Revenue
+                            const revenueMap = new Map();
+                            revenueReport.rows.forEach((row: any[]) => {
+                                // Row[0] is date/month (dimension)
+                                revenueMap.set(row[0], row[1]);
+                            });
+
+                            // Merge into main report
+                            const revHeaderIdx = report.columnHeaders.findIndex((h: any) => h.name === 'estimatedRevenue');
+
+                            if (revHeaderIdx !== -1) {
+                                // Header exists, update values in place
+                                report.rows = report.rows.map((row: any[]) => {
+                                    const dateKey = row[0];
+                                    const rev = revenueMap.get(dateKey) || 0;
+                                    const newRow = [...row];
+                                    newRow[revHeaderIdx] = rev;
+                                    return newRow;
+                                });
+                            } else {
+                                // Header missing, append new column
+                                report.columnHeaders.push({ name: 'estimatedRevenue', columnType: 'METRIC', dataType: 'FLOAT' });
+                                report.rows = report.rows.map((row: any[]) => {
+                                    const dateKey = row[0];
+                                    const rev = revenueMap.get(dateKey) || 0;
+                                    return [...row, rev];
+                                });
+                            }
+                        }
+                    } catch (revErr) {
+                        console.warn("[YouTubeData] Failed to fetch revenue report, defaulting to 0", revErr);
+                    }
+
                     setReportData(report);
                 } else {
                     setReportData(report || { rows: [], error: "No rows found" });
@@ -281,8 +323,55 @@ export function useYouTubeData() {
                     setTrafficData([]);
                 }
 
+                // Calculate Traffic Ratios for Heuristic (New vs Casual)
+                let discoveryRatio = 0.5; // Default fallback
+
+                try {
+                    const { report: fullTrafficReport } = await integrationsApi.getReports(
+                        'youtube', startDate, endDate, 'insightTrafficSourceType', 'views'
+                    );
+
+                    if (fullTrafficReport?.rows) {
+                        let discoveryViews = 0;
+                        let browsingViews = 0;
+
+                        // Heuristic Classification
+                        const discoverySources = new Set(['YT_SEARCH', 'EXT_URL', 'PROMOTE']);
+                        // browsingSources (Casual) = NO_LINK_OTHER (Home), YT_CHANNEL, PLAYLIST
+
+                        fullTrafficReport.rows.forEach((row: any[]) => {
+                            const source = row[0];
+                            const views = Number(row[1]);
+
+                            if (discoverySources.has(source)) {
+                                discoveryViews += views;
+                            } else if (source === 'RELATED_VIDEO') {
+                                // "Suggested" is a mix of New (Discovery) and Casual (Browsing)
+                                // We split it 50/50 to reflect this hybrid nature and balance the chart
+                                discoveryViews += views * 0.5;
+                                browsingViews += views * 0.5;
+                            } else if (source !== 'SUBSCRIBED' && source !== 'NOTIFICATION') {
+                                // Exclude explicit subscriber sources from this split ratio calculation
+                                browsingViews += views;
+                            }
+                        });
+
+                        const totalRelevant = discoveryViews + browsingViews;
+                        if (totalRelevant > 0) {
+                            discoveryRatio = discoveryViews / totalRelevant;
+                        }
+
+                        // Visual Failsafe: Ensure at least 10% representation if there is UNSUBSCRIBED traffic
+                        // This prevents "Monochrome" charts which look broken to the user
+                        discoveryRatio = Math.max(0.1, Math.min(0.9, discoveryRatio));
+                    }
+                } catch (err) {
+                    console.warn("Failed to calculate traffic ratios, using default", err);
+                }
+
                 // 3. Audience Report (CCN Strategy)
                 try {
+                    console.log("[YouTubeData] Fetching audience report...");
                     const { report: audienceReport } = await integrationsApi.getReports(
                         'youtube',
                         startDate,
@@ -292,21 +381,109 @@ export function useYouTubeData() {
                         'audience'
                     );
 
+                    console.log("[YouTubeData] Raw Audience Report:", audienceReport);
+
                     if (audienceReport?.rows) {
-                        // Rows: [subscribedStatus, views, avgViewDur, avgViewPct]
-                        // Map to Core (Subscribed) vs New/Casual (Unsubscribed)
-                        const processedAudience = audienceReport.rows.map((row: any[]) => ({
-                            name: row[0] === 'SUBSCRIBED' ? 'Core (Suscriptores)' : 'Nuevos / Casuales',
-                            value: Number(row[1]), // Views
-                            color: row[0] === 'SUBSCRIBED' ? '#3b82f6' : '#10b981'
-                        }));
+                        // Aggregate by status to avoid duplicates
+                        const agg = {
+                            subscribed: 0,
+                            unsubscribed: 0
+                        };
+
+                        audienceReport.rows.forEach((row: any[]) => {
+                            const views = Number(row[1]);
+                            console.log(`[YouTubeData] Audience Row: Status=${row[0]}, Views=${views}`);
+                            if (row[0] === 'SUBSCRIBED') {
+                                agg.subscribed += views;
+                            } else {
+                                agg.unsubscribed += views;
+                            }
+                        });
+
+                        // Apply Heuristic Split
+                        const newViews = Math.round(agg.unsubscribed * discoveryRatio);
+                        const casualViews = agg.unsubscribed - newViews;
+
+                        const processedAudience = [
+                            { name: 'Core (Suscriptores)', value: agg.subscribed, color: '#3b82f6' },
+                            { name: 'Nuevos (Discovery)', value: newViews, color: '#f97316' }, // Orange
+                            { name: 'Casuales (Browsing)', value: casualViews, color: '#22c55e' } // Green
+                        ];
+
+                        console.log("[YouTubeData] Processed Audience Data:", processedAudience);
                         setAudienceData(processedAudience);
                     } else {
+                        console.warn("[YouTubeData] No rows in audience report");
                         setAudienceData([]);
                     }
                 } catch (audienceErr) {
                     console.warn("Audience fetch failed", audienceErr);
                     setAudienceData([]);
+                }
+
+                // 4. Audience Trends (CCN Strategy - Time Series)
+                try {
+                    const { report: trendsReport } = await integrationsApi.getReports(
+                        'youtube',
+                        startDate,
+                        endDate,
+                        `${dimension},subscribedStatus`,
+                        'views',
+                        'audience'
+                    );
+
+                    if (trendsReport?.rows) {
+                        const trendsMap = new Map();
+                        trendsReport.rows.forEach((row: any[]) => {
+                            const date = row[0];
+                            const status = row[1]; // SUBSCRIBED or UNSUBSCRIBED
+                            const views = Number(row[2]);
+
+                            if (!trendsMap.has(date)) {
+                                trendsMap.set(date, { name: date, Core: 0, Casual: 0, New: 0 });
+                            }
+                            const entry = trendsMap.get(date);
+
+                            if (status === 'SUBSCRIBED') {
+                                entry.Core += views;
+                            } else {
+                                // Split Unsubscribed based on calculated ratio
+                                const newV = Math.round(views * discoveryRatio);
+                                const casualV = views - newV;
+                                entry.New += newV;
+                                entry.Casual += casualV;
+                            }
+                        });
+                        const processedTrends = Array.from(trendsMap.values()).sort((a: any, b: any) => a.name.localeCompare(b.name));
+                        setCcnTrendsData(processedTrends);
+                    } else {
+                        setCcnTrendsData([]);
+                    }
+                } catch (e) {
+                    console.warn("Audience trends fetch failed", e);
+                    setCcnTrendsData([]);
+                }
+
+                // 5. Recent Videos (CCN Analysis)
+                try {
+                    const { videos } = await integrationsApi.getVideos('youtube', 10, 'date');
+                    if (videos) {
+                        const processedVideos = videos.map((v: any) => ({
+                            id: v.id,
+                            title: v.snippet.title,
+                            type: "Casual", // Default as we can't determine easily
+                            views: Number(v.statistics?.viewCount || 0),
+                            likes: Number(v.statistics?.likeCount || 0),
+                            comments: Number(v.statistics?.commentCount || 0),
+                            performance: Number(v.statistics?.viewCount || 0) > 1000 ? "High" : "Avg"
+                        }));
+                        setRecentVideosCCN(processedVideos);
+                    } else {
+                        setRecentVideosCCN([]);
+                    }
+                } catch (e) {
+                    console.warn("Recent videos fetch failed", e);
+                    setRecentVideosCCN([]);
                 }
 
             } catch (e: any) {
@@ -338,5 +515,5 @@ export function useYouTubeData() {
         }
     };
 
-    return { ...data, connect, dateRange, setDateRange, reportData, reportLoading, trafficData, audienceData };
+    return { ...data, connect, dateRange, setDateRange, reportData, reportLoading, trafficData, audienceData, ccnTrendsData, recentVideosCCN };
 }

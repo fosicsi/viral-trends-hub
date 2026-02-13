@@ -19,6 +19,7 @@ export type ViralFilters = {
   date: "week" | "month" | "year" | "all";
   type: "all" | "short" | "medium" | "long" | "video"; // Added video
   order: "viewCount" | "date" | "relevance"; // Added relevance
+  minRatio?: number; // Added for aggressive outlier filtering
 };
 
 export type ViralHashtag = {

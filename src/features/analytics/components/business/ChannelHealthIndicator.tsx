@@ -35,35 +35,66 @@ function HealthMetric({ label, value, status, icon: Icon }: HealthMetricProps) {
     );
 }
 
-export function ChannelHealthIndicator() {
+import { ChannelHealthMetrics } from "../../hooks/useChannelHealth";
+import { Skeleton } from "@/components/ui/skeleton";
+
+interface ChannelHealthIndicatorProps {
+    metrics: ChannelHealthMetrics;
+}
+
+export function ChannelHealthIndicator({ metrics }: ChannelHealthIndicatorProps) {
+    if (metrics.loading) {
+        return (
+            <Card className="h-full">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Índice de Salud del Canal</CardTitle>
+                    <HeartPulse className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent className="space-y-4 pt-4">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-20 w-full rounded-lg" />
+                </CardContent>
+            </Card>
+        );
+    }
+
     return (
-        <Card className="h-full">
+        <Card className="h-full flex flex-col">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Índice de Salud del Canal</CardTitle>
-                <HeartPulse className="h-4 w-4 text-rose-500" />
+                <div className={`flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${metrics.overall.score >= 80 ? 'bg-green-100 text-green-700' :
+                        metrics.overall.score >= 50 ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-red-100 text-red-700'
+                    }`}>
+                    Score: {metrics.overall.score}/100
+                </div>
             </CardHeader>
-            <CardContent className="space-y-3 pt-4">
+            <CardContent className="space-y-3 pt-4 flex-1 flex flex-col">
                 <HealthMetric
                     label="Sostenibilidad"
-                    value="98%"
-                    status="healthy"
+                    value={metrics.sustainability.label}
+                    status={metrics.sustainability.score >= 70 ? "healthy" : metrics.sustainability.score >= 50 ? "warning" : "risk"}
                     icon={Activity}
                 />
                 <HealthMetric
                     label="Comunidad"
-                    value="Alto Eng."
-                    status="healthy"
+                    value={metrics.community.label}
+                    status={metrics.community.score >= 75 ? "healthy" : metrics.community.score >= 50 ? "warning" : "risk"}
                     icon={Users}
                 />
                 <HealthMetric
                     label="Diversidad"
-                    value="Dep. en 1 Hit"
-                    status="warning"
+                    value={metrics.diversity.label}
+                    status={metrics.diversity.score >= 80 ? "healthy" : metrics.diversity.score >= 50 ? "warning" : "risk"}
                     icon={Layers}
                 />
 
-                <div className="mt-4 p-3 bg-secondary/50 rounded-lg text-xs text-muted-foreground italic">
-                    "Tu canal crece sosteniblemente, pero 60% del tráfico viene de un solo video. Diversifica para asegurar el futuro."
+                <div className="mt-auto pt-4">
+                    <div className="p-3 bg-secondary/50 rounded-lg text-xs text-muted-foreground italic border border-border/50">
+                        "{metrics.overall.message}"
+                    </div>
                 </div>
             </CardContent>
         </Card>

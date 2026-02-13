@@ -20,8 +20,8 @@ export function ProfitabilityCard({ rpm, cpm, estimatedMonthlyRevenue }: Profita
             <CardContent>
                 <div className="flex items-center justify-between mb-4">
                     <div>
-                        <div className="text-2xl font-bold">${estimatedMonthlyRevenue.toLocaleString()}</div>
-                        <p className="text-xs text-muted-foreground">Ingreso Mensual Est.</p>
+                        <div className="text-2xl font-bold">${estimatedMonthlyRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        <p className="text-xs text-muted-foreground">Ingresos del Periodo</p>
                     </div>
                 </div>
 

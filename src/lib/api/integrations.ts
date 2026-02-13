@@ -99,6 +99,16 @@ export const integrationsApi = {
     return data;
   },
 
+  async getVideos(platform: 'youtube', maxResults = 10, order: 'date' | 'viewCount' | 'rating' = 'date') {
+    const { data } = await this.invokeFunction('channel-integration', {
+      action: 'videos',
+      platform,
+      maxResults,
+      order
+    });
+    return data;
+  },
+
   async disconnect(platform: string) {
     const { data } = await this.invokeFunction('channel-integration', { action: 'disconnect', platform });
     return data;

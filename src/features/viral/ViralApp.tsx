@@ -976,18 +976,27 @@ export default function ViralApp() {
                 <MorningDashboard
                   onExploreMore={() => setView("search")}
                   onQuickFilter={(type) => {
-                    setView("search");
-                    setViralResults([]); // Clear previous
-                    setHasViralSearched(false);
+                    // Navigate to Standard Search ("videos" view) instead of Legacy Viral Search
+                    const newFilters = { ...filters }; // Use global filters base
+                    let queryTerm = "tendencias";
 
-                    const newFilters = { ...viralFilters };
-                    if (type === 'shorts') newFilters.type = 'short';
-                    if (type === 'small') newFilters.maxSubs = 10000;
+                    if (type === 'shorts') {
+                      newFilters.type = 'short';
+                      newFilters.date = 'month'; // Fresh content
+                      queryTerm = "shorts virales";
+                    }
+                    if (type === 'small') {
+                      newFilters.maxSubs = 20000;
+                      newFilters.minViews = 2000;
+                      queryTerm = "joyas ocultas";
+                    }
 
-                    setViralFilters(newFilters);
+                    setFilters(newFilters);
+                    setQuery(queryTerm);
+                    setView("videos");
 
-                    // Trigger search immediately with new configuration
-                    runViralSearch(undefined, newFilters);
+                    // Trigger standard search (isViral = false)
+                    handleSearchGeneric(queryTerm, newFilters, false);
                   }}
                 />
               ) : view === "search" ? (

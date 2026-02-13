@@ -9,7 +9,7 @@ import { ViralVideoCard } from './components/ViralVideoCard'; // Using existing 
 import { toast } from 'sonner';
 
 // Reusing ViralVideoCard logic or creating a simplified version for Morning Ops
-const MorningCard = ({ item, onAddPlan }: { item: MorningItem, onAddPlan: (item: MorningItem) => void }) => {
+const MorningCard = ({ item, onAddPlan }: { item: MorningItem, onAddPlan: (e: React.MouseEvent) => void }) => {
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
@@ -43,7 +43,7 @@ const MorningCard = ({ item, onAddPlan }: { item: MorningItem, onAddPlan: (item:
                 </div>
 
                 <div className="pt-2 border-t border-border/50 flex gap-2">
-                    <Button variant="default" size="sm" className="w-full font-bold shadow-md shadow-primary/20" onClick={() => onAddPlan(item)}>
+                    <Button variant="default" size="sm" className="w-full font-bold shadow-md shadow-primary/20" onClick={onAddPlan}>
                         <PlusCircle className="w-4 h-4 mr-2" /> Agregar al Plan
                     </Button>
                     <Button variant="ghost" size="icon" className="shrink-0" onClick={() => window.open(`https://youtube.com/watch?v=${item.id}`, '_blank')}>

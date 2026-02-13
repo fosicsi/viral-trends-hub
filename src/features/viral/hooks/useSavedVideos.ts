@@ -6,33 +6,69 @@ export function useSavedVideos() {
   const [saved, setSaved] = React.useState<VideoItem[]>([]);
   const [loading, setLoading] = React.useState(true);
 
-  // 1. CARGAR DATOS REALES DE SUPABASE
+  // 1. CARGAR DATOS REALES DE SUPABASE (Videos Guardados + Plan de Contenidos)
   const fetchSaved = React.useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // A. Fetch Legacy Saved Videos
+      const { data: videosData, error: videosError } = await supabase
         .from('videos')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (videosError) throw videosError;
 
-      // Mapeamos de Snake_Case (DB) a CamelCase (Frontend)
-      const mappedVideos: VideoItem[] = (data || []).map(v => ({
+      // B. Fetch Content Plan Ideas
+      const { data: planData, error: planError } = await supabase
+        .from('content_creation_plan' as any)
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('status', 'idea') // Only ideas are "saved opportunities"
+        .order('created_at', { ascending: false });
+
+      if (planError) console.error("Plan Fetch Error:", planError);
+
+      // C. Map Legacy Videos
+      const mappedVideos: VideoItem[] = (videosData || []).map(v => ({
         id: v.youtube_video_id || "",
         title: v.title || "",
         url: v.url || "",
         thumbnail: v.thumbnail || "",
         channel: v.channel || "",
-        // 👇 AQUÍ ESTÁ LA CLAVE: Traemos los subs reales
         channelSubscribers: v.channel_subscribers || 0,
         views: v.views || 0,
         publishedAt: v.published_at || new Date().toISOString(),
-        durationString: "0:00", // Dato no crítico, ponemos default
-        // Calculamos growthRatio si no viene (views / subs)
+        durationString: "0:00",
         growthRatio: v.growth_ratio || (v.channel_subscribers > 0 ? v.views / v.channel_subscribers : 0)
       }));
 
-      setSaved(mappedVideos);
+      // D. Map Plan Items to VideoItem
+      const mappedPlan: VideoItem[] = (planData || []).map((p: any) => ({
+        id: p.source_video_id || p.id, // Fallback to ID
+        title: p.source_title || p.title,
+        url: `https://youtube.com/watch?v=${p.source_video_id}`,
+        thumbnail: p.source_thumbnail || "",
+        channel: p.source_channel || "",
+        channelSubscribers: p.source_channel_subs || 0,
+        views: p.source_views || 0,
+        publishedAt: p.created_at, // Use created_at as we don't store published_at in plan yet
+        durationString: "Idea",
+        growthRatio: (p.source_views && p.source_channel_subs) ? p.source_views / p.source_channel_subs : 0
+      }));
+
+      // Merge and Deduplicate (prefer Plan items if duplicates exist by ID)
+      const combined = [...mappedPlan, ...mappedVideos];
+      // Simple dedupe by ID
+      const seen = new Set();
+      const unique = combined.filter(v => {
+        const duplicate = seen.has(v.id);
+        seen.add(v.id);
+        return !duplicate;
+      });
+
+      setSaved(unique);
     } catch (e) {
       console.error("Error cargando videos:", e);
     } finally {

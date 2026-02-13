@@ -206,6 +206,8 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
                             source_title: item.title,
                             source_thumbnail: item.thumbnail,
                             source_channel: item.channelTitle,
+                            source_views: Number(item.views),
+                            source_channel_subs: Number(item.channelSubs),
                             status: 'idea',
                             ai_suggestions: `Inspirado en viral del canal ${item.channelTitle} (${Number(item.views).toLocaleString()} vistas). Razón: ${item.reason}`
                         });

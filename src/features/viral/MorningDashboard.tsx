@@ -56,7 +56,7 @@ const MorningCard = ({ item, onAddPlan }: { item: MorningItem, onAddPlan: (item:
 export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMore: () => void, onQuickFilter: (type: 'shorts' | 'small' | 'all') => void }) {
     const [opportunities, setOpportunities] = useState<MorningItem[]>([]);
     const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
+    const [error, setError] = useState(false);
     const isMounted = useRef(true);
 
     useEffect(() => {
@@ -65,6 +65,8 @@ export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMo
 
     const loadOps = async (force = false) => {
         setLoading(true);
+        setError(false);
+
         const res = await getMorningOpportunities(force ? undefined : undefined); // Keyword auto-detected
 
         if (!isMounted.current) return;
@@ -73,8 +75,10 @@ export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMo
             setOpportunities(res.data);
             if (res.source === 'cache') toast.info("Resultados cacheados (Top 5 hoy)");
         } else {
-            // Silently fail or log if needed, but don't toast if it's just a navigation abort
-            if (isMounted.current) toast.error("Error cargando oportunidades");
+            if (isMounted.current) {
+                setError(true);
+                toast.error("No pudimos cargar las oportunidades. Intenta de nuevo.");
+            }
         }
         if (isMounted.current) setLoading(false);
     };
@@ -119,6 +123,15 @@ export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMo
                         <div key={i} className="aspect-[3/4] rounded-2xl bg-card border border-border animate-pulse" />
                     ))}
                 </div>
+            ) : error ? (
+                <div className="flex flex-col items-center justify-center py-24 text-center space-y-4 rounded-3xl border border-dashed border-red-500/20 bg-red-500/5">
+                    <AlertCircle className="w-10 h-10 text-red-500 opacity-50" />
+                    <div className="space-y-1">
+                        <h3 className="font-bold text-lg text-foreground">Error de conexión</h3>
+                        <p className="text-sm text-muted-foreground">No pudimos conectar con los servicios de viralidad.</p>
+                    </div>
+                    <Button variant="outline" onClick={() => loadOps(true)}>Intentar de nuevo</Button>
+                </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                     {opportunities.map((op) => (
@@ -128,7 +141,7 @@ export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMo
                         <div className="col-span-full py-12 text-center text-muted-foreground bg-card border border-border border-dashed rounded-2xl">
                             <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
                             <p>No encontramos oportunidades exactas hoy. Prueba explorando manualmente.</p>
-                            <Button variant="link" onClick={onExploreMore}>Ir al Buscador</Button>
+                            <Button variant="link" onClick={onExploreMore}>Ir al Buscador General</Button>
                         </div>
                     )}
                 </div>
@@ -137,16 +150,19 @@ export function MorningDashboard({ onExploreMore, onQuickFilter }: { onExploreMo
             {/* Quick Actions / Explore More */}
             <div className="border-t border-border pt-12">
                 <div className="flex flex-col items-center justify-center space-y-6 text-center">
-                    <h3 className="text-xl font-bold">¿Necesitas más inspiración?</h3>
+                    <h3 className="text-xl font-bold">¿Buscas algo más específico?</h3>
+                    <p className="text-muted-foreground text-sm max-w-lg -mt-4">
+                        Usa los filtros rápidos para encontrar contenido adaptado a tu estrategia.
+                    </p>
                     <div className="flex flex-wrap gap-3 justify-center">
                         <Button variant="outline" size="lg" className="rounded-full h-12 px-6" onClick={onExploreMore}>
-                            <Search className="w-4 h-4 mr-2" /> Ir al Buscador
+                            <Search className="w-4 h-4 mr-2" /> Ir al Buscador General
                         </Button>
-                        <Button variant="secondary" size="lg" className="rounded-full h-12 px-6" onClick={() => onQuickFilter('shorts')}>
-                            <PlayCircle className="w-4 h-4 mr-2" /> Solo Shorts
+                        <Button variant="secondary" size="lg" className="rounded-full h-12 px-6 border border-border/50 hover:bg-red-500/10 hover:text-red-500 transition-colors" onClick={() => onQuickFilter('shorts')}>
+                            <PlayCircle className="w-4 h-4 mr-2" /> Explorar Shorts
                         </Button>
-                        <Button variant="secondary" size="lg" className="rounded-full h-12 px-6" onClick={() => onQuickFilter('small')}>
-                            <AlertCircle className="w-4 h-4 mr-2" /> Canales Pequeños (-10k)
+                        <Button variant="secondary" size="lg" className="rounded-full h-12 px-6 border border-border/50 hover:bg-green-500/10 hover:text-green-500 transition-colors" onClick={() => onQuickFilter('small')}>
+                            <AlertCircle className="w-4 h-4 mr-2" /> Cazar Canales Pequeños
                         </Button>
                     </div>
                 </div>

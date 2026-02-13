@@ -322,8 +322,8 @@ export default function ViralApp() {
   const handleOutlierSearch = () => {
     const aggressiveFilters: ViralFilters = {
       minViews: 1000,
-      maxSubs: 10000,
-      minRatio: 10,
+      maxSubs: 20000, // Relaxed from 10k to find more candidates
+      minRatio: 3, // Relaxed from 10x to ensure results, then sort by ratio
       date: "month",
       type: "short",
       order: "relevance"
@@ -985,7 +985,11 @@ export default function ViralApp() {
                     </div>
                   </div>
 
-                  {!viralLoading && hasViralSearched && viralResults.length === 0 && <EmptyState onRetry={() => setShowViralFilters(true)} />}
+                  {!viralLoading && hasViralSearched && viralResults.length === 0 && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
+                      <EmptyState onRetry={() => setShowViralFilters(true)} />
+                    </motion.div>
+                  )}
 
                   {!viralLoading && viralResults.length > 0 && (
                     <>

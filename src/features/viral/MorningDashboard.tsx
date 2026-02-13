@@ -273,7 +273,14 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                     {opportunities.map((op, i) => (
-                        <MorningCard key={op.id || i} item={op} onAddPlan={handleAddPlan} />
+                        <MorningCard
+                            key={op.id || i}
+                            item={op}
+                            onAddPlan={(e) => {
+                                e.stopPropagation();
+                                handleAddPlan(op);
+                            }}
+                        />
                     ))}
                     {opportunities.length === 0 && (
                         <div className="col-span-full py-12 text-center text-muted-foreground bg-card border border-border border-dashed rounded-2xl">

@@ -1,6 +1,7 @@
 import * as React from "react";
 import type { VideoItem } from "../types";
 import { ViralVideoCard } from "./ViralVideoCard";
+import { ScriptDisplayModal } from "./ScriptDisplayModal";
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown, Clock, Gem, TrendingUp, Users } from "lucide-react";
 
@@ -13,12 +14,14 @@ export function ViralSavedView({
   onGoSearch,
   onClear,
   onTagClick,
+  onGenerateScript,
 }: {
   saved: VideoItem[];
   onOpen: (v: VideoItem) => void;
   onToggleSave: (v: VideoItem) => void;
   onGoSearch: () => void;
   onClear: () => void;
+  onGenerateScript?: (v: VideoItem) => void;
   onTagClick?: (tag: string) => void;
 }) {
   const [sortBy, setSortBy] = React.useState<SortOption>("recent");
@@ -48,6 +51,18 @@ export function ViralSavedView({
         return data;
     }
   }, [saved, sortBy]);
+
+  const [viewingScriptVideo, setViewingScriptVideo] = React.useState<VideoItem | null>(null);
+
+  const handleScriptAction = (video: VideoItem) => {
+    if (video.scriptStatus === 'done') {
+      setViewingScriptVideo(video);
+    } else {
+      if (onGenerateScript) {
+        onGenerateScript(video);
+      }
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -81,7 +96,7 @@ export function ViralSavedView({
             <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground mr-2">
               Ordenar por:
             </p>
-            
+
             <Button
               variant={sortBy === "recent" ? "secondary" : "ghost"}
               size="sm"
@@ -142,11 +157,20 @@ export function ViralSavedView({
               onOpen={onOpen}
               saved
               onToggleSave={onToggleSave}
+              onGenerateScript={handleScriptAction}
               onTagClick={onTagClick}
             />
           ))}
         </div>
       )}
+
+      {/* Script Modal */}
+      <ScriptDisplayModal
+        isOpen={!!viewingScriptVideo}
+        onClose={() => setViewingScriptVideo(null)}
+        scriptData={viewingScriptVideo?.scriptContent}
+        videoTitle={viewingScriptVideo?.title}
+      />
     </div>
   );
 }

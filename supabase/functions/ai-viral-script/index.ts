@@ -1,3 +1,6 @@
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers":
@@ -6,6 +9,35 @@ const corsHeaders = {
 };
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+const YOUTUBE_API_KEY = Deno.env.get("YOUTUBE_API_KEY");
+
+// --- Helpers: YouTube Data ---
+
+async function getYouTubeComments(videoId: string): Promise<string[]> {
+    if (!videoId || !YOUTUBE_API_KEY) return [];
+
+    try {
+        const url = `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=20&order=relevance&key=${YOUTUBE_API_KEY}`;
+        console.log(`Fetching comments for video: ${videoId}`);
+
+        const res = await fetch(url);
+        if (!res.ok) {
+            console.warn(`YouTube Comments API Error: ${res.status} ${res.statusText}`);
+            return [];
+        }
+
+        const data = await res.json();
+        const comments = (data.items || []).map((item: any) =>
+            item.snippet.topLevelComment.snippet.textDisplay
+        );
+
+        // Filter out very short comments or spam (basic)
+        return comments.filter((c: string) => c.length > 20).slice(0, 15);
+    } catch (e) {
+        console.error("Error fetching YouTube comments:", e);
+        return [];
+    }
+}
 
 // --- Helpers: AI ---
 
@@ -59,10 +91,10 @@ async function callAI(prompt: string, apiKey: string): Promise<any> {
             if (!text) {
                 console.warn(`Model ${model} returned empty text`);
                 lastError = "Empty response";
-                continue;
+                continue; // Try next model
             }
 
-            // Extract JSON from text (sometimes models wrap in markdown code blocks)
+            // Extract JSON from text
             const startIndex = text.indexOf("{");
             const endIndex = text.lastIndexOf("}");
             if (startIndex === -1 || endIndex === -1) {
@@ -91,11 +123,10 @@ async function callAI(prompt: string, apiKey: string): Promise<any> {
     throw new Error(`All AI models failed. Last error: ${lastError}`);
 }
 
-Deno.serve(async (req) => {
+serve(async (req) => {
     if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
     try {
-        // 1. Auth Check (Basic Supabase Auth)
         const authHeader = req.headers.get('Authorization');
         if (!authHeader) {
             return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
@@ -104,52 +135,90 @@ Deno.serve(async (req) => {
             });
         }
 
-        // Optionally verify user here if needed, but RLS usually handles it if we used the client.
-        // For Edge Functions invoked by client with Auth header, we trust Supabase to validate the JWT 
-        // if we were using getUser(). But here we just need to know they are logged in.
-        // Let's do a quick verify to be safe and get user ID if needed for logging (optional).
-
-        const { videoTitle, channelName } = await req.json();
+        const { videoTitle, channelName, context, videoId } = await req.json();
         if (!videoTitle) throw new Error("Missing videoTitle");
 
         if (!GEMINI_API_KEY) {
             throw new Error("Server Misconfiguration: GEMINI_API_KEY is missing");
         }
 
-        const prompt = `
-    Actúa como un Estratega de Contenido Viral y Director Creativo.
-    Analiza este video: "${videoTitle}" (Canal: ${channelName || 'N/A'}).
+        // 1. Fetch Real Comments (Data-Driven Insight)
+        let commentsList: string[] = [];
+        let commentsContext = "";
 
-    1. DECIDE LA ESTRATEGIA: ¿Qué formato funciona mejor para este nicho?
-       - Si es fútbol/deportes: Quizás "Pantalla dividida (Reacción)" o "Análisis de jugada".
-       - Si es curiosidades/geo: "Voz en off con mapas 3D".
-       - Si es humor: "Sketch POV".
+        if (videoId) {
+            commentsList = await getYouTubeComments(videoId);
+            if (commentsList.length > 0) {
+                commentsContext = `
+                ACTUAL AUDIENCE FEEDBACK (COMENTARIOS REALES DEL VIDEO):
+                "${commentsList.join('" | "')}"
+                
+                ISTRUCCIÓN CRÍTICA: Analiza estros comentarios. Busca "Content Gaps" (brechas), quejas, dudas no resueltas o puntos de dolor.
+                Úsalos para mejorar el guion. Tu guion debe resolver lo que el video original falló en explicar.
+                `;
+            } else {
+                commentsContext = "Nota: No se encontraron comentarios relevantes. Basa la estrategia en el título y métricas.";
+            }
+        }
+
+        // 2. Construct Prompt
+        let metricsContext = "";
+        if (context) {
+            const { views, subs, reason } = context;
+            metricsContext = `
+            MÉTRICAS:
+            - Vistas: ${views ? Number(views).toLocaleString() : 'N/A'}
+            - Suscriptores Canal: ${subs ? Number(subs).toLocaleString() : 'N/A'}
+            - Factor Viral Detectado: "${reason || 'Desconocido'}"
+            `;
+        }
+
+        const prompt = `
+    Actúa como un Estratega de Contenido Viral y Guionista Senior (Data-Driven).
     
-    2. GENERA EL PAQUETE (IMPORTANTE: RESPONDER EN ESPAÑOL):
-    Salvo los campos dentro de "prompts" (que deben ser en inglés), todo el resto del contenido (títulos, guion, estrategia) DEBE ser en ESPAÑOL.
-    
-    Responde ÚNICAMENTE con este JSON:
+    OBJETIVO: Crear un guion SUPERIOR al video original, resolviendo las brechas que la audiencia reclamó.
+
+    VIDEO REFERENCIA: "${videoTitle}"
+    CANAL: ${channelName || 'N/A'}
+    ${metricsContext}
+
+    ${commentsContext}
+
+    TAREA:
+    1. ANALIZA los comentarios (si hay) y las métricas. Identifica la oportunidad de mejora.
+    2. CREA UNA ESTRATEGIA para "robar" esta audiencia con un mejor video.
+    3. ESCRIBE UN GUION COMPLETO (en Español).
+
+    FORMATO DE RESPUESTA (JSON):
+    Responde ÚNICAMENTE con este JSON válido:
     {
-      "strategy": {
-        "format": "Nombre del formato ideal (Ej: Split Screen Reaction)",
-        "vibe": "Atmósfera del video (Ej: Eufórico, Educativo, Chill)",
-        "advice": "Consejo de edición específico (Ej: Pon el video original abajo y tu cara arriba reaccionando en silencio)"
+      "analysis": {
+         "gap_identified": "Qué le faltó al video original según los comentarios (o intuición)",
+         "opportunity": "Cómo tu guion va a ser mejor (Ej: 'Explicaré el paso X que todos preguntaron')"
       },
-      "titles": ["Título 1 (Gancho fuerte)", "Título 2 (Curiosidad)", "Título 3 (Polémico)"],
+      "strategy": {
+        "format": "Formato visual recomendado",
+        "vibe": "Tono emocional",
+        "hook_technique": "Técnica usada (Ej: 'Open Loop', 'Pregunta retórica')"
+      },
+      "titles": [
+          "Título 1 (Mejorado)", 
+          "Título 2 (Alto CTR)", 
+          "Título 3 (Storytelling)"
+      ],
       "script": { 
-         "hook": "Lo que se dice o el texto en pantalla (0-3s)", 
-         "body": "Lo que ocurre o se narra", 
-         "cta": "Cierre" 
+         "hook": "GANCHO (0-3s): Texto a cámara/pantalla. DEBE ser potente.", 
+         "intro": "INTRO (3-10s): Contexto y promesa de valor.", 
+         "body": "CUERPO: Contenido principal, resolviendo el 'gap'.", 
+         "cta": "CIERRE: Llamada a la acción." 
       },
       "seo": { 
         "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"], 
-        "keywords": ["keyword1", "keyword2", "keyword3", "keyword4"] 
+        "description_snippet": "Primera línea descripción" 
       },
       "prompts": { 
-        "image": "Prompt Midjourney Thumbnail (English)",
-        "videoStart": "Prompt Runway Intro (English)",
-        "videoEnd": "Prompt Runway Outro (English)",
-        "music": "Prompt Suno Audio (English)"
+        "thumbnail_image": "Midjourney prompt (English)",
+        "b_roll": "Runway/Pika prompt (English)"
       }
     }
   `;

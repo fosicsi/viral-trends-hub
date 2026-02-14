@@ -11,6 +11,11 @@ export type VideoItem = {
   thumbnail: string;
   url: string;
   growthRatio: number;
+  scriptStatus?: 'none' | 'generating' | 'done' | 'error';
+  scriptContent?: any; // JSON with title, script, seo, etc.
+  sourceTable?: 'videos' | 'content_creation_plan';
+  dbId?: string;
+  reason?: string; // Added for context
 };
 
 export type ViralFilters = {

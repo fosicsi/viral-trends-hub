@@ -172,7 +172,7 @@ export default function ViralApp() {
   const [viralFilters, setViralFilters] = React.useState<ViralFilters>({ minViews: 10_000, maxSubs: 200_000, date: "week", type: "short", order: "viewCount", });
   const [filters, setFilters] = React.useState<ViralFilters>({ minViews: 10_000, maxSubs: 500_000, date: "year", type: "short", order: "viewCount", });
 
-  const { saved, isSaved, toggleSaved, clearSaved } = useSavedVideos();
+  const { saved, isSaved, toggleSaved, clearSaved, generateScript } = useSavedVideos();
 
   React.useEffect(() => {
     setViralPackage(null);
@@ -1001,6 +1001,8 @@ export default function ViralApp() {
               {view === "viral" ? (
                 <MorningDashboard
                   onExploreMore={() => setView("search")}
+                  onToggleSave={toggleSaved}
+                  isSaved={isSaved}
                   onQuickFilter={async (type) => {
                     // Navigate to Standard Search ("videos" view) with Context-Aware Query
 
@@ -1074,7 +1076,15 @@ export default function ViralApp() {
                   )}
                 </div>
               ) : view === "saved" ? (
-                <ViralSavedView saved={saved} onOpen={setSelected} onToggleSave={toggleSaved} onGoSearch={() => setView("videos")} onClear={clearSaved} onTagClick={handleTagClick} />
+                <ViralSavedView
+                  saved={saved}
+                  onOpen={(v) => { setSelected(v); }}
+                  onToggleSave={toggleSaved}
+                  onGoSearch={() => setView("viral")}
+                  onClear={clearSaved}
+                  onTagClick={handleTagClick}
+                  onGenerateScript={generateScript}
+                />
               ) : view === "glossary" ? (
                 <ViralGlossaryView />
               ) : (

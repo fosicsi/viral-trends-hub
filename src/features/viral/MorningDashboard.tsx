@@ -10,7 +10,19 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 
-export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void }) {
+import { VideoItem } from './types'; // Ensure VideoItem is imported if not already, or use 'any' if types are loose in this file (it seems loose based on previous usage)
+
+export function MorningDashboard({
+    onExploreMore,
+    onToggleSave,
+    isSaved,
+    onQuickFilter
+}: {
+    onExploreMore: () => void;
+    onToggleSave: (video: any) => void;
+    isSaved: (id: string) => boolean;
+    onQuickFilter: (type: string) => void;
+}) {
     const [opportunities, setOpportunities] = useState<MorningItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -18,11 +30,12 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
     // Use a ref to track if we have already fired the load effect to prevent double calls in strict mode, 
     // BUT we need to be careful with hot reload.
     const hasFetched = useRef(false);
-    const navigate = useNavigate();
+    // const navigate = useNavigate(); // Removed unused
     const [selectedVideo, setSelectedVideo] = useState<MorningItem | null>(null);
     const [detectedNiche, setDetectedNiche] = useState<string>("Detectando...");
 
     const loadOpportunities = async () => {
+        // ... same execution ...
         setLoading(true);
         setError(null);
         try {
@@ -48,14 +61,12 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
             // Fallback to "Tecnología" only if absolutely nothing is found
             const userNiche = (identityData?.identity_profile as any)?.tema_principal || "Technology";
 
-            setDetectedNiche(userNiche); // For Debug UI
+            setDetectedNiche(userNiche);
             console.log("Loading Morning Ops for Niche:", userNiche);
 
-            // 2. Fetch Opportunities
-            // Add forced timestamp to prevent aggressive caching
             const res = await getMorningOpportunities(userNiche);
             if (res.success) {
-                setOpportunities(res.data as any[]); // Force cast to fix type mismatch
+                setOpportunities(res.data as any[]);
                 setLastUpdated(new Date());
             } else {
                 setError(res.error || "Error desconocido");
@@ -69,48 +80,8 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
     };
 
     useEffect(() => {
-        // Simple mount check
         loadOpportunities();
     }, []);
-
-    const handleQuickFilter = (type: string) => {
-        // Implement filtering or navigation to explore with preset
-        onExploreMore();
-    };
-
-    const handleAddPlan = async (item: MorningItem) => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-            toast.error("Debes iniciar sesión");
-            return;
-        }
-
-        toast.promise(
-            async () => {
-                const { error } = await supabase
-                    .from('content_creation_plan' as any)
-                    .insert({
-                        user_id: session.user.id,
-                        title: `Idea de: ${item.title}`,
-                        source_video_id: item.id,
-                        source_title: item.title,
-                        source_thumbnail: item.thumbnail,
-                        source_channel: item.channelTitle,
-                        source_views: Number(item.views),
-                        source_channel_subs: Number(item.channelSubs),
-                        status: 'idea',
-                        ai_suggestions: `Inspirado en viral del canal ${item.channelTitle} (${Number(item.views).toLocaleString()} vistas). Razón: ${item.reason}`
-                    });
-
-                if (error) throw error;
-            },
-            {
-                loading: 'Guardando en tu Plan de Contenidos...',
-                success: '¡Guardado! La IA puede generar el guion ahora.',
-                error: 'Error al guardar. Intenta de nuevo.'
-            }
-        );
-    };
 
     return (
         <div className="w-full max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-12">
@@ -130,7 +101,7 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
                         </p>
                         {/* DEBUG BADGE */}
                         <Badge variant="secondary" className="text-[10px] font-mono opacity-70">
-                            <Target className="w-3 h-3 mr-1" /> {detectedNiche} (v2)
+                            <Target className="w-3 h-3 mr-1" /> {detectedNiche}
                         </Badge>
                     </div>
 
@@ -167,7 +138,6 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                     {opportunities.map((op, i) => {
-                        // Safe mapping to prevent crashes in ViralVideoCard
                         const videoItem: any = {
                             id: op.id || `temp-${i}`,
                             title: op.title || "Sin título",
@@ -186,8 +156,8 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
                                 key={op.id || i}
                                 video={videoItem}
                                 onOpen={() => setSelectedVideo(op)}
-                                saved={false}
-                                onToggleSave={() => handleAddPlan(op)}
+                                saved={isSaved(String(op.id))}
+                                onToggleSave={() => onToggleSave(videoItem)}
                             />
                         );
                     })}
@@ -212,10 +182,10 @@ export function MorningDashboard({ onExploreMore }: { onExploreMore: () => void 
                         <Button variant="outline" size="lg" className="rounded-full h-12 px-6" onClick={onExploreMore}>
                             <Search className="w-4 h-4 mr-2" /> Buscador General
                         </Button>
-                        <Button variant="secondary" size="lg" className="rounded-full h-12 px-6 border border-border/50 hover:bg-red-500/10 hover:text-red-500 transition-colors" onClick={() => handleQuickFilter('shorts')}>
+                        <Button variant="secondary" size="lg" className="rounded-full h-12 px-6 border border-border/50 hover:bg-red-500/10 hover:text-red-500 transition-colors" onClick={() => onQuickFilter('shorts')}>
                             <PlayCircle className="w-4 h-4 mr-2" /> Explorar Shorts
                         </Button>
-                        <Button variant="secondary" size="lg" className="rounded-full h-12 px-6 border border-border/50 hover:bg-green-500/10 hover:text-green-500 transition-colors" onClick={() => handleQuickFilter('joya oculta')}>
+                        <Button variant="secondary" size="lg" className="rounded-full h-12 px-6 border border-border/50 hover:bg-green-500/10 hover:text-green-500 transition-colors" onClick={() => onQuickFilter('joya oculta')}>
                             <AlertCircle className="w-4 h-4 mr-2" /> Cazar Joyas
                         </Button>
                     </div>

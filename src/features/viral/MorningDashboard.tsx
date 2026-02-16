@@ -86,11 +86,31 @@ export function MorningDashboard({
     const [opsLoading, setOpsLoading] = useState(true);
     const [opsError, setOpsError] = useState<string | null>(null);
     const [selectedVideo, setSelectedVideo] = useState<MorningItem | null>(null);
+    const [dismissedIds, setDismissedIds] = useState<string[]>(() => {
+        try {
+            return JSON.parse(localStorage.getItem('vth_dismissed_ops') || '[]');
+        } catch { return []; }
+    });
 
     // -- Load 4 vital stats (48h) via Edge Function (cached) --
     useEffect(() => {
         const loadStats = async () => {
-            setStatsLoading(true);
+            // 0. Try local cache first (instant load)
+            const cached = localStorage.getItem('vth_stats_cache');
+            if (cached) {
+                try {
+                    const parsed = JSON.parse(cached);
+                    // If cache is less than 4h old, use it
+                    if (Date.now() - parsed.timestamp < 4 * 60 * 60 * 1000) {
+                        setStats(parsed.data);
+                        setStatsLoading(false);
+                        // Still fetch in background but don't show skeleton again
+                    }
+                } catch (e) { console.warn('Cache parse error', e); }
+            }
+
+            if (!cached) setStatsLoading(true);
+
             try {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session) { setStatsLoading(false); return; }
@@ -115,8 +135,6 @@ export function MorningDashboard({
                     const mainReport = await integrationsApi.getReports(
                         'youtube', startDate, endDate, 'day'
                     );
-                    console.log('[Home] Main report:', mainReport?.report?.rows?.length, 'rows',
-                        mainReport?.report?.columnHeaders?.map((h: any) => h.name));
                     if (mainReport?.report?.rows && mainReport?.report?.columnHeaders) {
                         const headers = mainReport.report.columnHeaders;
                         const iViews = findCol(headers, 'views');
@@ -160,7 +178,9 @@ export function MorningDashboard({
                     console.warn('Home: CTR fetch failed', e);
                 }
 
-                setStats({ views48h, ctr48h, avgViewPct48h, subsGained48h, fetchedAt });
+                const newStats = { views48h, ctr48h, avgViewPct48h, subsGained48h, fetchedAt };
+                setStats(newStats);
+                localStorage.setItem('vth_stats_cache', JSON.stringify({ timestamp: Date.now(), data: newStats }));
 
                 // Get niche
                 const { data: identityData } = await (supabase
@@ -184,12 +204,29 @@ export function MorningDashboard({
     useEffect(() => {
         const loadOps = async () => {
             if (!detectedNiche) return;
-            setOpsLoading(true);
+
+            // Try cache first
+            const cachedArr = localStorage.getItem('vth_ops_cache');
+            if (cachedArr) {
+                try {
+                    const parsed = JSON.parse(cachedArr);
+                    if (Date.now() - parsed.timestamp < 12 * 60 * 60 * 1000) { // 12h cache
+                        setOpportunities(parsed.data);
+                        setOpsLoading(false);
+                    }
+                } catch { /* ignore */ }
+            }
+
+            if (!opportunities.length) setOpsLoading(true);
             setOpsError(null);
             try {
                 const res = await getMorningOpportunities(detectedNiche);
                 if (res.success) {
                     setOpportunities(res.data as any[]);
+                    localStorage.setItem('vth_ops_cache', JSON.stringify({
+                        timestamp: Date.now(),
+                        data: res.data
+                    }));
                 } else {
                     setOpsError(res.error || 'Error desconocido');
                 }
@@ -201,6 +238,12 @@ export function MorningDashboard({
         };
         loadOps();
     }, [detectedNiche]);
+
+    const handleDismiss = (id: string) => {
+        const newDismissed = [...dismissedIds, id];
+        setDismissedIds(newDismissed);
+        localStorage.setItem('vth_dismissed_ops', JSON.stringify(newDismissed));
+    };
 
     // -- Daily rotating tips pool (changes every day) --
     const tips: CreatorTip[] = useMemo(() => {
@@ -563,37 +606,45 @@ export function MorningDashboard({
                         </p>
                         <Button variant="ghost" size="sm" onClick={onExploreMore}>Ir al buscador</Button>
                     </div>
-                ) : opportunities.filter(op => !isSaved(String(op.id))).length === 0 ? (
+                ) : opportunities.filter(op => !isSaved(String(op.id)) && !dismissedIds.includes(String(op.id))).length === 0 ? (
                     <div className="flex flex-col items-center py-12 text-center space-y-3 rounded-2xl border border-dashed border-border/50 bg-card/20">
                         <Search className="w-8 h-8 text-muted-foreground/30" />
-                        <p className="text-sm text-muted-foreground">Ya guardaste todas las oportunidades. ¡Bien hecho!</p>
+                        <p className="text-sm text-muted-foreground">Ya viste todas las oportunidades de hoy.</p>
                         <Button variant="ghost" size="sm" onClick={onExploreMore}>Buscar más</Button>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {opportunities.filter(op => !isSaved(String(op.id))).slice(0, 3).map((op, i) => {
-                            const videoItem: any = {
-                                id: op.id || `temp-${i}`,
-                                title: op.title || 'Sin título',
-                                thumbnail: op.thumbnail || '',
-                                channel: op.channelTitle || 'Desconocido',
-                                views: Number(op.views) || 0,
-                                publishedAt: op.publishedAt || new Date().toISOString(),
-                                channelSubscribers: Number(op.channelSubs) || 0,
-                                durationString: op.duration || 'Short',
-                                growthRatio: Number(op.ratio) || 0,
-                                url: op.id ? `https://youtube.com/watch?v=${op.id}` : '#',
-                            };
-                            return (
-                                <ViralVideoCard
-                                    key={op.id || i}
-                                    video={videoItem}
-                                    onOpen={() => setSelectedVideo(op)}
-                                    saved={isSaved(String(op.id))}
-                                    onToggleSave={() => onToggleSave(videoItem)}
-                                />
-                            );
-                        })}
+                        {opportunities
+                            .filter(op => !isSaved(String(op.id)) && !dismissedIds.includes(String(op.id)))
+                            .slice(0, 3)
+                            .map((op, i) => {
+                                const videoItem: any = {
+                                    id: op.id || `temp-${i}`,
+                                    title: op.title || 'Sin título',
+                                    thumbnail: op.thumbnail || '',
+                                    channel: op.channelTitle || 'Desconocido',
+                                    views: Number(op.views) || 0,
+                                    publishedAt: op.publishedAt || new Date().toISOString(),
+                                    channelSubscribers: Number(op.channelSubs) || 0,
+                                    durationString: op.duration || 'Short',
+                                    growthRatio: Number(op.ratio) || 0,
+                                    url: op.id ? `https://youtube.com/watch?v=${op.id}` : '#',
+                                };
+                                return (
+                                    <ViralVideoCard
+                                        key={op.id || i}
+                                        video={videoItem}
+                                        onOpen={() => setSelectedVideo(op)}
+                                        saved={isSaved(String(op.id))}
+                                        onToggleSave={() => {
+                                            onToggleSave(videoItem);
+                                            if (!isSaved(String(op.id))) {
+                                                handleDismiss(String(op.id));
+                                            }
+                                        }}
+                                    />
+                                );
+                            })}
                     </div>
                 )}
             </section>

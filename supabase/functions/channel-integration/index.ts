@@ -140,6 +140,7 @@ Deno.serve(async (req) => {
         if (action === 'init') {
             const platform = body.platform || url.searchParams.get('platform');
             const redirectUrl = body.redirectUrl || url.searchParams.get('redirectUrl');
+            const prompt = body.prompt || url.searchParams.get('prompt') || 'select_account consent';
 
             // Allow 'google' as a valid platform
             if (!platform || !['youtube', 'gemini', 'google'].includes(platform)) throw new Error("Invalid platform");
@@ -149,7 +150,7 @@ Deno.serve(async (req) => {
             const finalRedirectUri = redirectUrl ?? `${Deno.env.get("SUPABASE_URL")}/functions/v1/oauth-connect/callback`;
 
             const state = btoa(JSON.stringify({ platform, userId: user.id, nonce: Math.random() }));
-            const authUrl = `${GOOGLE_AUTH_URL}?client_id=${clientId}&redirect_uri=${encodeURIComponent(finalRedirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}&access_type=offline&prompt=consent&state=${state}`;
+            const authUrl = `${GOOGLE_AUTH_URL}?client_id=${clientId}&redirect_uri=${encodeURIComponent(finalRedirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}&access_type=offline&prompt=${encodeURIComponent(prompt)}&state=${state}`;
 
             return new Response(JSON.stringify({ url: authUrl }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
         }

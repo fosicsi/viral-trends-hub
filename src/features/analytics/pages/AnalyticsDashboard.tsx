@@ -41,14 +41,14 @@ import { useChannelHealth } from "../hooks/useChannelHealth";
 import { InfoTooltip } from "../components/common/InfoTooltip";
 import { generateSmartAlerts } from "../utils/smartAlerts";
 
-// Mock data for initial visualization
+// Mock data for initial visualization (STATIC values, no more random)
 const data = [
-    { name: "Ene", total: Math.floor(Math.random() * 5000) + 1000 },
-    { name: "Feb", total: Math.floor(Math.random() * 5000) + 1000 },
-    { name: "Mar", total: Math.floor(Math.random() * 5000) + 1000 },
-    { name: "Abr", total: Math.floor(Math.random() * 5000) + 1000 },
-    { name: "May", total: Math.floor(Math.random() * 5000) + 1000 },
-    { name: "Jun", total: Math.floor(Math.random() * 5000) + 1000 },
+    { name: "Ene", total: 4500 },
+    { name: "Feb", total: 5200 },
+    { name: "Mar", total: 4800 },
+    { name: "Abr", total: 6100 },
+    { name: "May", total: 5500 },
+    { name: "Jun", total: 6700 },
 ];
 
 // Mock retention data
@@ -214,29 +214,26 @@ export default function AnalyticsDashboard() {
 
     } else {
         // No report data yet
-        // If range is 'all', we fallback to global stats for Views/Subs
+        // If range is 'all', we MUST use global stats for Views/Subs
         if (dateRange === 'all') {
             currentViews = views;
             currentSubs = subscribers;
-            // WatchTime/Retention not available in global stats, so 0 is correct until report loads
+        } else if (isDemo && !isConnected) {
+            // ONLY use mock data if explicitly in demo AND NOT connected
+            const multiplier = dateRange === '7d' ? 0.25 : dateRange === '90d' ? 3 : 1;
+            currentViews = Math.round(125430 * multiplier);
+            currentSubs = Math.round(4520 * multiplier);
+            currentWatchTimeHours = Math.round(7970 * multiplier);
+            currentAVD = "4:27";
+            currentRetention = 48.2;
+            currentRevenue = 1250 * multiplier;
         } else {
-            // FALLBACK TO MOCK REPORT DATA IN DEMO MODE if real report is missing
-            if (isDemo) {
-                // Simulate different values for different ranges to show interactivity
-                const multiplier = dateRange === '7d' ? 0.25 : dateRange === '90d' ? 3 : 1;
-                currentViews = Math.round(125430 * multiplier);
-                currentSubs = Math.round(4520 * multiplier);
-                currentWatchTimeHours = Math.round(7970 * multiplier);
-                currentAVD = "4:27";
-                currentRetention = 48.2;
-                currentRevenue = 1250 * multiplier;
-            } else {
-                currentViews = 0;
-                currentSubs = 0;
-                currentWatchTimeHours = 0;
-                currentAVD = "0:00";
-                currentRetention = 0;
-            }
+            // Connected but no report data yet = 0
+            currentViews = 0;
+            currentSubs = 0;
+            currentWatchTimeHours = 0;
+            currentAVD = "0:00";
+            currentRetention = 0;
         }
     }
 

@@ -39,20 +39,18 @@ const MOCK_TRAFFIC_DATA = [
 const generateMockReportData = () => {
     const rows = [];
     const now = new Date();
-    // Generate 30 days
+    // Generate 30 days of STATIC data (no more random to avoid confusion)
     for (let i = 29; i >= 0; i--) {
         const date = new Date(now);
         date.setDate(date.getDate() - i);
         const dateStr = date.toISOString().split('T')[0];
-        // [day, views, estMin, avgDur, avgPct, subs]
-        // Random usage data
         rows.push([
             dateStr,
-            Math.floor(Math.random() * 5000) + 1000, // Views
-            Math.floor(Math.random() * 20000) + 5000, // Watch Min
-            Math.floor(Math.random() * 300) + 120, // Avg Dur (sec)
-            Math.random() * 40 + 30, // Avg Pct (30-70) - Note: API returns 0-100 usually, assuming 45 is 45%
-            Math.floor(Math.random() * 50) + 5 // Subs
+            1500 + (i * 50), // Views
+            6000 + (i * 200), // Watch Min
+            240, // Avg Dur (sec)
+            45.5, // Avg Pct
+            12 // Subs
         ]);
     }
     return {

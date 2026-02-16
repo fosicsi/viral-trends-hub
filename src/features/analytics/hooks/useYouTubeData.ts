@@ -196,6 +196,7 @@ export function useYouTubeData() {
                     return;
                 }
 
+                // If we reach here, we ARE connected. isDemo must be false.
                 // Fetch Real Data (Stats)
                 let statsData;
                 try {
@@ -245,21 +246,37 @@ export function useYouTubeData() {
                     throw new Error("Invalid stats data format");
                 }
             } catch (err: any) {
-                console.log("Analytics: Connection check failed/incomplete, falling back to Demo Mode", err);
+                console.log("Analytics: Connection check failed, deciding fallback", err);
                 const errorMessage = String(err?.message || err || "");
                 const isQuota = errorMessage.includes("403") || errorMessage.includes("quota");
 
-                setData({
-                    ...MOCK_DATA,
-                    isConnected: false,
-                    isDemo: true, // Still true if we fail completely
-                    loading: false,
-                    error: isQuota ? "Cuota de YouTube excedida. Mostrando datos de demostración." : null
-                });
-                setTrafficData(MOCK_TRAFFIC_DATA);
-                setReportData(MOCK_REPORT_DATA);
-                setAudienceData(MOCK_AUDIENCE_DATA);
-                setRecentVideosCCN(MOCK_RECENT_VIDEOS); // Set Mock Videos
+                // Check if we have an integration at least (might have failed mid-way)
+                const { data: integrations } = await integrationsApi.getStatus().catch(() => ({ data: [] }));
+                const hasAnyIntegration = integrations?.some(i => i.platform === 'youtube' || i.platform === 'google');
+
+                if (hasAnyIntegration) {
+                    // Stay in connected state but show error, don't hide behind demo data
+                    setData(prev => ({
+                        ...prev,
+                        isConnected: true,
+                        isDemo: false,
+                        loading: false,
+                        error: isQuota ? "Cuota de YouTube excedida por hoy." : `Error: ${errorMessage}`
+                    }));
+                } else {
+                    // No integration, ok to show demo
+                    setData({
+                        ...MOCK_DATA,
+                        isConnected: false,
+                        isDemo: true,
+                        loading: false,
+                        error: isQuota ? "Cuota de YouTube excedida. Mostrando datos de demostración." : null
+                    });
+                    setTrafficData(MOCK_TRAFFIC_DATA);
+                    setReportData(MOCK_REPORT_DATA);
+                    setAudienceData(MOCK_AUDIENCE_DATA);
+                    setRecentVideosCCN(MOCK_RECENT_VIDEOS);
+                }
             }
         };
 

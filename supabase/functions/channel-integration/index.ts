@@ -551,14 +551,13 @@ Deno.serve(async (req) => {
             const calculateRangeKey = (start: string, end: string): string | null => {
                 const s = new Date(start); const e = new Date(end);
                 const diff = Math.floor((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24));
-                if (diff <= 3) return '2d'; if (diff <= 8) return '7d'; if (diff <= 30) return '28d'; if (diff <= 95) return '90d'; if (diff <= 370) return '365d'; return 'all';
+                if (diff <= 8) return '7d'; if (diff <= 30) return '28d'; if (diff <= 95) return '90d'; if (diff <= 370) return '365d'; return 'all';
             };
 
             const getCanonicalDates = (rangeKey: string): { start: string, end: string } => {
                 const today = new Date(); today.setHours(0, 0, 0, 0); today.setDate(today.getDate() - 2);
                 const end = new Date(today); const start = new Date(today);
                 switch (rangeKey) {
-                    case '2d': start.setDate(today.getDate() - 2); break;  // 3-day window for data reliability
                     case '7d': start.setDate(today.getDate() - 7); break;
                     case '28d': start.setDate(today.getDate() - 28); break;
                     case '90d': start.setDate(today.getDate() - 90); break;

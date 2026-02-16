@@ -95,29 +95,31 @@ export function MorningDashboard({
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session) { setStatsLoading(false); return; }
 
-                // YouTube Analytics API has ~2-3 day data delay.
-                // Query 3 complete days to ensure we always capture real data.
+                // Use a 7-day window (reliable, has cache), but only sum last 3 days of data
                 const now = new Date();
                 const endDay = new Date(now);
-                endDay.setDate(endDay.getDate() - 2);  // 2 days ago (latest usually available)
-                const startDay = new Date(endDay);
-                startDay.setDate(startDay.getDate() - 2); // 4 days ago (3-day window)
+                const startDay = new Date(now);
+                startDay.setDate(startDay.getDate() - 7);
                 const endDate = endDay.toISOString().split('T')[0];
                 const startDate = startDay.toISOString().split('T')[0];
-                console.log(`[Home] 48h stats date range: ${startDate} → ${endDate}`);
+                console.log(`[Home] Stats fetch range: ${startDate} → ${endDate}`);
 
                 let views48h = 0, subsGained48h = 0, avgViewPct48h = 0, ctr48h = 0;
                 let fetchedAt: string | null = null;
 
-                // 1. Main metrics: views, subscribersGained, averageViewPercentage
+                // 1. Core metrics: views, subscribersGained, averageViewPercentage
                 try {
                     const mainReport = await integrationsApi.getReports(
                         'youtube', startDate, endDate, 'day',
                         'views,subscribersGained,averageViewPercentage'
                     );
+                    console.log('[Home] Main report rows:', mainReport?.report?.rows?.length);
                     if (mainReport?.report?.rows) {
+                        // Only sum last 3 rows (most recent days with data) for ~48h stats
+                        const rows = mainReport.report.rows;
+                        const recentRows = rows.slice(-3);
                         let totalPct = 0, totalDays = 0;
-                        for (const row of mainReport.report.rows) {
+                        for (const row of recentRows) {
                             views48h += Number(row[1] || 0);
                             subsGained48h += Number(row[2] || 0);
                             const pct = Number(row[3] || 0);
@@ -130,16 +132,16 @@ export function MorningDashboard({
                     console.warn('Home: main metrics fetch failed', e);
                 }
 
-                // 2. CTR metric (separate call — can't mix with subscribersGained)
+                // 2. CTR metric (separate — can't mix with subscribersGained)
                 try {
                     const ctrReport = await integrationsApi.getReports(
                         'youtube', startDate, endDate, 'day',
                         'views,videoThumbnailImpressions,videoThumbnailImpressionsClickRate'
                     );
                     if (ctrReport?.report?.rows) {
+                        const ctrRows = ctrReport.report.rows.slice(-3);
                         let totalImpressions = 0, totalClicks = 0;
-                        for (const row of ctrReport.report.rows) {
-                            const dayViews = Number(row[1] || 0);
+                        for (const row of ctrRows) {
                             const dayImpressions = Number(row[2] || 0);
                             const dayRate = Number(row[3] || 0);
                             totalImpressions += dayImpressions;

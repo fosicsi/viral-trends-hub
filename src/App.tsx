@@ -12,6 +12,9 @@ import AnalyticsLayout from "./features/analytics/layout/AnalyticsLayout";
 import AnalyticsDashboard from "./features/analytics/pages/AnalyticsDashboard";
 import AnalyticsSettings from "./features/analytics/pages/AnalyticsSettings";
 
+import Onboarding from "./pages/Onboarding";
+import OnboardingGuard from "./components/auth/OnboardingGuard";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -21,16 +24,35 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/integrations" element={<IntegrationsPage />} />
+          {/* Public / Auth Roots */}
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/auth/callback" element={<OAuthCallback />} />
-          <Route path="/analytics" element={<AnalyticsLayout />}>
+          <Route path="/onboarding" element={
+            <OnboardingGuard>
+              <Onboarding />
+            </OnboardingGuard>
+          } />
+
+          {/* Protected Main Routes */}
+          <Route path="/" element={
+            <OnboardingGuard>
+              <Index />
+            </OnboardingGuard>
+          } />
+          <Route path="/integrations" element={
+            <OnboardingGuard>
+              <IntegrationsPage />
+            </OnboardingGuard>
+          } />
+          <Route path="/analytics" element={
+            <OnboardingGuard>
+              <AnalyticsLayout />
+            </OnboardingGuard>
+          }>
             <Route index element={<AnalyticsDashboard />} />
             <Route path="settings" element={<AnalyticsSettings />} />
-            {/* Future sub-routes can be added here */}
           </Route>
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

@@ -95,13 +95,13 @@ export function MorningDashboard({
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session) { setStatsLoading(false); return; }
 
-                // YouTube Analytics API has ~2 day data delay.
-                // Query last 2 complete days (e.g. today=Feb 16 → query Feb 13-14).
+                // YouTube Analytics API has ~2-3 day data delay.
+                // Query 3 complete days to ensure we always capture real data.
                 const now = new Date();
                 const endDay = new Date(now);
-                endDay.setDate(endDay.getDate() - 2);  // 2 days ago (latest available)
+                endDay.setDate(endDay.getDate() - 2);  // 2 days ago (latest usually available)
                 const startDay = new Date(endDay);
-                startDay.setDate(startDay.getDate() - 1); // 3 days ago
+                startDay.setDate(startDay.getDate() - 2); // 4 days ago (3-day window)
                 const endDate = endDay.toISOString().split('T')[0];
                 const startDate = startDay.toISOString().split('T')[0];
                 console.log(`[Home] 48h stats date range: ${startDate} → ${endDate}`);
@@ -555,15 +555,15 @@ export function MorningDashboard({
                         </p>
                         <Button variant="ghost" size="sm" onClick={onExploreMore}>Ir al buscador</Button>
                     </div>
-                ) : opportunities.length === 0 ? (
+                ) : opportunities.filter(op => !isSaved(String(op.id))).length === 0 ? (
                     <div className="flex flex-col items-center py-12 text-center space-y-3 rounded-2xl border border-dashed border-border/50 bg-card/20">
                         <Search className="w-8 h-8 text-muted-foreground/30" />
-                        <p className="text-sm text-muted-foreground">No hay oportunidades hoy. Probá explorando manualmente.</p>
-                        <Button variant="ghost" size="sm" onClick={onExploreMore}>Ir al buscador</Button>
+                        <p className="text-sm text-muted-foreground">Ya guardaste todas las oportunidades. ¡Bien hecho!</p>
+                        <Button variant="ghost" size="sm" onClick={onExploreMore}>Buscar más</Button>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {opportunities.slice(0, 3).map((op, i) => {
+                        {opportunities.filter(op => !isSaved(String(op.id))).slice(0, 3).map((op, i) => {
                             const videoItem: any = {
                                 id: op.id || `temp-${i}`,
                                 title: op.title || 'Sin título',

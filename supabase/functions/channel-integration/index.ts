@@ -558,7 +558,7 @@ Deno.serve(async (req) => {
                 const today = new Date(); today.setHours(0, 0, 0, 0); today.setDate(today.getDate() - 2);
                 const end = new Date(today); const start = new Date(today);
                 switch (rangeKey) {
-                    case '2d': start.setDate(today.getDate() - 1); break;
+                    case '2d': start.setDate(today.getDate() - 2); break;  // 3-day window for data reliability
                     case '7d': start.setDate(today.getDate() - 7); break;
                     case '28d': start.setDate(today.getDate() - 28); break;
                     case '90d': start.setDate(today.getDate() - 90); break;

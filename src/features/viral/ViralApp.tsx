@@ -1003,11 +1003,23 @@ export default function ViralApp() {
                   onExploreMore={() => setView("search")}
                   onToggleSave={toggleSaved}
                   isSaved={isSaved}
-                  onQuickFilter={async (type) => {
+                  onNavigate={(target) => {
+                    if (target === 'analytics') {
+                      navigate('/analytics');
+                    } else if (target === 'create') {
+                      // Phase 2: will route to ContentCreatorStudio
+                      // For now, go to search as placeholder
+                      setView("search");
+                      toast.info("Estudio de Creación en desarrollo", { description: "Por ahora, usá el buscador + Kit Viral." });
+                    } else {
+                      setView(target as any);
+                    }
+                  }}
+                  onQuickFilter={async (type, nicheOverride) => {
                     // Navigate to Standard Search ("videos" view) with Context-Aware Query
 
-                    // Use the current AI topic or user's niche if available, otherwise fallback
-                    let baseTopic = (viralTopic && viralTopic.length > 2) ? viralTopic : (viralInput || ""); // Use viralInput
+                    // Use the overridden niche (from Dashboard), or current topic, or input
+                    let baseTopic = nicheOverride || (viralTopic && viralTopic.length > 2 && !VIRAL_TOPICS.includes(viralTopic) ? viralTopic : (viralInput || ""));
 
                     if (!baseTopic) {
                       const fetched = await ensureTopic();
@@ -1019,6 +1031,11 @@ export default function ViralApp() {
                       return;
                     }
 
+                    // Update global topic if we have a strong signal
+                    if (nicheOverride && nicheOverride !== viralTopic) {
+                      setViralTopic(nicheOverride);
+                    }
+
                     const newFilters = { ...filters }; // Use global filters base
                     let queryTerm = baseTopic;
 
@@ -1027,14 +1044,17 @@ export default function ViralApp() {
                       newFilters.date = 'month'; // Fresh content
                       queryTerm = `${baseTopic} shorts`;
                     }
-                    if (type === 'small') {
+                    if (type === 'joya oculta' || type === 'small') {
                       newFilters.maxSubs = 20000;
                       newFilters.minViews = 2000;
-                      queryTerm = `${baseTopic} joya oculta`;
+                      // Relaxed filters to ensure results
+                      newFilters.date = 'year';
+                      queryTerm = `${baseTopic}`;
                     }
 
                     setFilters(newFilters);
                     setQuery(queryTerm);
+                    setViralInput(baseTopic); // Sync input
                     setView("videos");
 
                     // Trigger standard search (isViral = false)
@@ -1076,15 +1096,17 @@ export default function ViralApp() {
                   )}
                 </div>
               ) : view === "saved" ? (
-                <ViralSavedView
-                  saved={saved}
-                  onOpen={(v) => { setSelected(v); }}
-                  onToggleSave={toggleSaved}
-                  onGoSearch={() => setView("viral")}
-                  onClear={clearSaved}
-                  onTagClick={handleTagClick}
-                  onGenerateScript={generateScript}
-                />
+                <div className="container mx-auto px-6 py-8">
+                  <ViralSavedView
+                    saved={saved}
+                    onOpen={(v) => { setSelected(v); }}
+                    onToggleSave={toggleSaved}
+                    onGoSearch={() => { handleResetSearch(); setView('viral'); }}
+                    onClear={clearSaved}
+                    onTagClick={handleTagClick}
+                    onGenerateScript={handleGenerateScript}
+                  />
+                </div>
               ) : view === "glossary" ? (
                 <ViralGlossaryView />
               ) : (

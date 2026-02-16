@@ -7,6 +7,7 @@ interface ChartContainerProps {
     children: React.ReactNode;
     action?: React.ReactNode;
     className?: string; // Allow custom classNames for flexibility
+    info?: React.ReactNode;
 }
 
 export function ChartContainer({
@@ -15,13 +16,17 @@ export function ChartContainer({
     children,
     action,
     className,
+    info,
 }: ChartContainerProps) {
     return (
         <Card className={className}>
             <CardHeader>
                 <div className="flex items-center justify-between">
                     <div>
-                        <CardTitle>{title}</CardTitle>
+                        <CardTitle className="flex items-center gap-2">
+                            {title}
+                            {info}
+                        </CardTitle>
                         {description && <CardDescription>{description}</CardDescription>}
                     </div>
                     {action && <div>{action}</div>}

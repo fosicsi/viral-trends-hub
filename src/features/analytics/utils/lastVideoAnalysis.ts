@@ -96,6 +96,7 @@ function getDaysAgo(dateString: string): number {
 export async function getLastVideo(): Promise<YouTubeVideo | null> {
     try {
         console.log('[getLastVideo] Fetching latest video...');
+        // Optimized: Now uses playlistItems (1 unit) instead of search (100 units)
         const response = await integrationsApi.getVideos('youtube', 1, 'date');
         console.log('[getLastVideo] Response:', response);
 
@@ -127,57 +128,55 @@ export async function getRecentVideos(count: number = 10): Promise<YouTubeVideo[
 }
 
 /**
- * Get analytics metrics for a specific video
- * Note: YouTube Analytics API doesn't provide per-video CTR/retention easily
- * We'll estimate based on available data
- */
 export async function getVideoAnalytics(videoId: string, publishedDate: string): Promise<Partial<VideoMetrics>> {
     try {
         // Fetch analytics for the video's date range (from published to today)
         const startDate = publishedDate.split('T')[0];
         const endDate = new Date().toISOString().split('T')[0];
 
-        const response = await integrationsApi.getReports(
-            'youtube',
-            startDate,
-            endDate,
-            'day',
-            'views,estimatedMinutesWatched,averageViewPercentage,averageViewDuration',
-            'main'
-        );
+        // YouTube Analytics API: Impressions and CTR are incompatible with some other metrics
+        // We'll fetch in two groups to be safe
+        const group1 = 'views,estimatedMinutesWatched,averageViewPercentage,averageViewDuration';
+        const group2 = 'impressions,impressionClickThroughRate';
 
-        // Note: This gets channel-wide metrics for that period, not video-specific
-        // YouTube Analytics API requires advanced quotas for per-video metrics
-        // For now, we'll use channel averages as proxy
+        console.log(`[getVideoAnalytics] Fetching for video: ${videoId}`);
 
-        if (response?.reports && response.reports.length > 0) {
-            const report = response.reports[0];
-            const rows = report.rows || [];
+const [res1, res2] = await Promise.all([
+    integrationsApi.getReports('youtube', startDate, endDate, 'day', group1, 'main', `video==${videoId}`),
+    integrationsApi.getReports('youtube', startDate, endDate, 'day', group2, 'main', `video==${videoId}`)
+]);
 
-            if (rows.length > 0) {
-                // Average all rows
-                let totalRetention = 0;
-                let totalAVD = 0;
-                let count = 0;
+const stats: Partial<VideoMetrics> = {};
 
-                rows.forEach((row: any[]) => {
-                    if (row[2]) totalRetention += row[2]; // averageViewPercentage
-                    if (row[3]) totalAVD += row[3]; // averageViewDuration
-                    count++;
-                });
+if (res1?.report?.rows?.length > 0) {
+    // Aggregate totals/averages for the period
+    let totalRetention = 0;
+    let totalAVD = 0;
+    let rows = res1.report.rows;
 
-                return {
-                    retention: count > 0 ? totalRetention / count : undefined,
-                    avgViewDuration: count > 0 ? totalAVD / count : undefined,
-                };
-            }
-        }
+    rows.forEach((row: any[]) => {
+        totalRetention += row[3]; // averageViewPercentage
+        totalAVD += row[4]; // averageViewDuration (indices: day=0, views=1, estMin=2, avgPct=3, avgDur=4)
+    });
 
-        return {};
+    stats.retention = totalRetention / rows.length;
+    stats.avgViewDuration = totalAVD / rows.length;
+}
+
+if (res2?.report?.rows?.length > 0) {
+    let totalCTR = 0;
+    let rows = res2.report.rows;
+    rows.forEach((row: any[]) => {
+        totalCTR += row[2]; // impressionClickThroughRate (indices: day=0, impressions=1, ctr=2)
+    });
+    stats.ctr = totalCTR / rows.length;
+}
+
+return stats;
     } catch (error) {
-        console.error('Error fetching video analytics:', error);
-        return {};
-    }
+    console.error('Error fetching video analytics:', error);
+    return {};
+}
 }
 
 /**
@@ -307,22 +306,25 @@ export async function analyzeLastVideo(): Promise<LastVideoAnalysis | null> {
     try {
         console.log('[analyzeLastVideo] Starting analysis...');
 
-        // 1. Get last video
-        const lastVideo = await getLastVideo();
-        if (!lastVideo) {
+        // 1. Get recent videos (Fetch ONCE for both last video and averages)
+        console.log('[analyzeLastVideo] Fetching recent videos...');
+        // Optimized: Uses playlistItems (1 unit)
+        const recentVideos = await getRecentVideos(11); // Fetch 11 to have 1 target + 10 history
+        console.log('[analyzeLastVideo] Got', recentVideos.length, 'recent videos');
+
+        if (recentVideos.length === 0) {
             console.warn('[analyzeLastVideo] No videos found, returning null');
             return null;
         }
 
-        console.log('[analyzeLastVideo] Got last video:', lastVideo.snippet.title);
+        // Target Video is the most recent one
+        const lastVideo = recentVideos[0];
+        console.log('[analyzeLastVideo] Analyzing target video:', lastVideo.snippet.title);
 
-        // 2. Get recent videos for comparison
-        console.log('[analyzeLastVideo] Fetching recent videos for averaging...');
-        const recentVideos = await getRecentVideos(10);
-        console.log('[analyzeLastVideo] Got', recentVideos.length, 'recent videos');
-
-        const channelAverages = await getChannelAverages(recentVideos);
-        console.log('[analyzeLastVideo] Channel averages:', channelAverages);
+        // Comparison Videos are the next 10 (excluding target to compare vs "typical")
+        const comparisonVideos = recentVideos.slice(1);
+        const channelAverages = await getChannelAverages(comparisonVideos.length > 0 ? comparisonVideos : [lastVideo]);
+        console.log('[analyzeLastVideo] Channel averages derived from', comparisonVideos.length, 'videos');
 
         // 3. Parse video data
         const durationSeconds = parseDuration(lastVideo.contentDetails.duration);

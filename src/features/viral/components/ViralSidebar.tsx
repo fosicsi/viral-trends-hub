@@ -77,11 +77,10 @@ export function ViralSidebar({
         </button>
 
         <nav className="flex flex-col gap-3 mt-4">
-          <NavItem id="home" icon={Home} label="Inicio" />
+          <NavItem id="viral" icon={Home} label="Inicio" />
 
           <NavItem id="search" icon={Search} label="Buscar" />
           <NavItem id="saved" icon={Bookmark} label="Guardado" />
-          <NavItem id="glossary" icon={HelpCircle} label="Glosario" />
 
           <button
             onClick={() => navigate('/analytics')}
@@ -106,6 +105,11 @@ export function ViralSidebar({
 
       {/* Bottom: User, Settings & Theme */}
       <div className="flex flex-col gap-4 items-center mb-2">
+
+        {/* Bottom Utils */}
+        <div className="flex flex-col gap-2 w-full px-2">
+          <NavItem id="glossary" icon={HelpCircle} label="Glosario" />
+        </div>
 
         {/* User Profile */}
         {user && (

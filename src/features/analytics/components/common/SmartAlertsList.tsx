@@ -4,7 +4,7 @@ import { AlertCircle, AlertTriangle, CheckCircle, Info } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-interface SmartAlert {
+export interface SmartAlert {
     id: string;
     type: "critical" | "warning" | "opportunity" | "info";
     title: string;
@@ -12,31 +12,17 @@ interface SmartAlert {
     date: string;
 }
 
-const mockAlerts: SmartAlert[] = [
-    {
-        id: "1",
-        type: "critical",
-        title: "Caída de Retención",
-        message: "Tu último video tiene una retención 20% menor al promedio en los primeros 30s.",
-        date: "Hace 2 horas"
-    },
-    {
-        id: "2",
-        type: "opportunity",
-        title: "Tendencia Viral Detectada",
-        message: "El tema 'React 19' está explotando en tu nicho. Considera hacer un video follow-up.",
-        date: "Hace 5 horas"
-    },
-    {
-        id: "3",
-        type: "warning",
-        title: "Frecuencia de Subida",
-        message: "No has subido video en 10 días. Tu consistencia está bajando.",
-        date: "Hace 1 día"
-    }
-];
+// remove local mockAlerts as we utilize external one or remove it if not needed
+const mockAlerts: SmartAlert[] = []; // cleared
 
-export function SmartAlertsList() {
+interface SmartAlertsListProps {
+    alerts?: SmartAlert[];
+}
+
+export function SmartAlertsList({ alerts = [] }: SmartAlertsListProps) {
+    // Fallback to empty if no alerts (or use mock if you prefer, but we want real)
+    const effectiveAlerts = alerts.length > 0 ? alerts : [];
+
     const getIcon = (type: SmartAlert["type"]) => {
         switch (type) {
             case "critical": return <AlertCircle className="h-4 w-4 text-red-600" />;
@@ -46,25 +32,29 @@ export function SmartAlertsList() {
         }
     };
 
-    const getBadgeVariant = (type: SmartAlert["type"]) => {
-        switch (type) {
-            case "critical": return "destructive";
-            case "warning": return "secondary"; // or a custom yellow variant
-            case "opportunity": return "default";
-            default: return "outline";
-        }
-    };
+    if (effectiveAlerts.length === 0) {
+        return (
+            <Card>
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base font-medium">Alertas Inteligentes</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-sm text-muted-foreground">Todo tranquilo por aquí. No hay alertas críticas.</p>
+                </CardContent>
+            </Card>
+        );
+    }
 
     return (
         <Card>
             <CardHeader className="pb-3">
                 <CardTitle className="text-base font-medium flex items-center justify-between">
                     Alertas Inteligentes
-                    <Badge variant="outline" className="ml-2">{mockAlerts.length} Nuevas</Badge>
+                    <Badge variant="outline" className="ml-2">{effectiveAlerts.length} Nuevas</Badge>
                 </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-                {mockAlerts.map((alert) => (
+                {effectiveAlerts.map((alert) => (
                     <div key={alert.id} className="flex items-start gap-4 p-3 rounded-lg border bg-muted/30">
                         <div className="mt-1">{getIcon(alert.type)}</div>
                         <div className="space-y-1">

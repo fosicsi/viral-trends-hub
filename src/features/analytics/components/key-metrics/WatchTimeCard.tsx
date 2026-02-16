@@ -1,7 +1,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Info, Timer } from "lucide-react";
+import { InfoTooltip } from "../common/InfoTooltip";
+import { Timer } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
 interface WatchTimeCardProps {
@@ -16,16 +16,16 @@ export function WatchTimeCard({ totalHours, averageViewDuration, algorithmicScor
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <div className="flex items-center gap-2">
                     <CardTitle className="text-sm font-medium">Tiempo de Visualización</CardTitle>
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger>
-                                <Info className="h-4 w-4 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Tiempo total que los espectadores pasaron viendo tus videos.</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
+                    <InfoTooltip
+                        description={
+                            <div className="space-y-2">
+                                <p>Tiempo total acumulado que la audiencia ha pasado viendo tu contenido.</p>
+                                <p className="pt-2 border-t border-border/50 font-medium text-xs">
+                                    Un alto tiempo de visualización indica al algoritmo que tu contenido es adictivo.
+                                </p>
+                            </div>
+                        }
+                    />
                 </div>
                 <Timer className="h-4 w-4 text-muted-foreground" />
             </CardHeader>

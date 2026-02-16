@@ -72,12 +72,18 @@ export const integrationsApi = {
   async getStatus() {
     console.log("integrationsApi: Checking status...");
     try {
-      const { data } = await this.invokeFunction('channel-integration', { action: 'status' });
+      const { data, error } = await this.invokeFunction('channel-integration', { action: 'status' });
       console.log("integrationsApi: Response data:", data);
-      return data as { data: Integration[] };
+      if (error) {
+        console.error("integrationsApi: Status check error:", error);
+        return { data: null, error };
+      }
+      // Handle both cases: [ ... ] or { data: [ ... ] }
+      const integrations = Array.isArray(data) ? data : (data?.data || []);
+      return { data: integrations as Integration[], error: null };
     } catch (error) {
       console.error("integrationsApi: Status check failed", error);
-      throw error;
+      return { data: null, error };
     }
   },
 
@@ -86,7 +92,7 @@ export const integrationsApi = {
     return data;
   },
 
-  async getReports(platform: string, startDate: string, endDate: string, dimensions = 'day', metrics?: string, reportType?: 'main' | 'audience' | 'traffic') {
+  async getReports(platform: string, startDate: string, endDate: string, dimensions = 'day', metrics?: string, reportType?: 'main' | 'audience' | 'traffic', filters?: string) {
     const { data } = await this.invokeFunction('channel-integration', {
       action: 'reports', // Reverted from 'get_reports' for compatibility
       platform,
@@ -94,7 +100,8 @@ export const integrationsApi = {
       endDate,
       dimensions,
       metrics,
-      reportType
+      reportType,
+      filters
     });
     return data;
   },

@@ -82,6 +82,22 @@ type ViralFilters = {
   minRatio?: number;
 };
 
+interface InternalVideoItem {
+  id: string;
+  title: string;
+  channel: string;
+  channelSubscribers: number;
+  views: number;
+  publishedAt: string;
+  durationString: string;
+  _durSeconds: number;
+  thumbnail: string;
+  url: string;
+  growthRatio: number;
+}
+
+type VideoItem = Omit<InternalVideoItem, "_durSeconds">;
+
 // ... type definitions ...
 
 function normalizeFilters(input: any): ViralFilters {
@@ -151,6 +167,35 @@ Deno.serve(async (req) => {
     const query = String(body?.query ?? "").trim() || "viral ideas";
     const filters: ViralFilters = normalizeFilters(body?.filters);
 
+    // CACHE CHECK
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // Create a cache key based on query and key filters (date/duration)
+    const cacheKey = `search:${query}:${filters.date}:${filters.order}`;
+
+    // Try to get from cache (Global search cache would be better, but we reuse the table)
+    // We use a fixed user_id '00000000-0000-0000-0000-000000000000' for global cache or just rely on the user's cache if we want personalization.
+    // For now, let's use global cache for "search" to save max quota.
+    const GLOBAL_CACHE_USER = '00000000-0000-0000-0000-000000000000';
+
+    const { data: cached } = await supabaseAdmin
+      .from('youtube_analytics_cache')
+      .select('data')
+      .eq('user_id', GLOBAL_CACHE_USER)
+      .eq('data_type', cacheKey)
+      .gt('expires_at', new Date().toISOString())
+      .single();
+
+    if (cached?.data) {
+      console.log(`⚡ Cache Hit for: ${query}`);
+      return new Response(JSON.stringify({ success: true, data: cached.data }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // 1. Configuración de parámetros comunes
     const durationParam = "&videoDuration=short"; // Buscamos shorts en la API
     const publishedAfter = getPublishedAfterDate(filters.date);
@@ -165,8 +210,8 @@ Deno.serve(async (req) => {
 
       let allCandidates: InternalVideoItem[] = [];
       let nextPageToken = "";
-      const MAX_PAGES = 3; // Deep Search: Look into up to 150 videos
-      const TARGET_RESULTS = 10; // Stop if we found enough gems
+      const MAX_PAGES = 1; // Optimized: Single page search to save quota (100 units per search)
+      const TARGET_RESULTS = 10;
 
       for (let page = 0; page < MAX_PAGES; page++) {
         if (allCandidates.length >= TARGET_RESULTS) break;
@@ -269,17 +314,8 @@ Deno.serve(async (req) => {
     // 1. Primer intento: Con el orden que pidió el usuario (generalmente "viewCount")
     let finalResults = await fetchAndFilter(filters.order);
 
-    // 2. FALLBACK: Si encontramos pocos videos (< 5) y el usuario no ordenó por "relevance",
-    // probamos con "relevance". Esto suele mezclar canales grandes con pequeños.
-    if (finalResults.length < 5 && filters.order !== "relevance") {
-      console.log("⚠️ Pocos resultados, activando búsqueda de respaldo (Relevance)...");
-      const fallbackResults = await fetchAndFilter("relevance");
-
-      // Fusionamos sin duplicados
-      const existingIds = new Set(finalResults.map(v => v.id));
-      const novelties = fallbackResults.filter(v => !existingIds.has(v.id));
-      finalResults = [...finalResults, ...novelties];
-    }
+    // 2. FALLBACK ELIMINADO para ahorrar cuota (ahorro de 300 unidades por búsqueda)
+    // Si no hay resultados, el cliente deberá probar términos más amplios.
 
     // 3. Orden final para el usuario: Siempre por "Mayor Oportunidad" (Ratio)
     // Así los videos más virales quedan arriba, vengan de donde vengan.
@@ -289,6 +325,18 @@ Deno.serve(async (req) => {
     const cleanData: VideoItem[] = finalResults
       .slice(0, 48) // Limitamos a 48 para no saturar
       .map(({ _durSeconds, ...rest }) => rest);
+
+    // SAVE TO CACHE (Global: 24 hours)
+    if (cleanData.length > 0) {
+      await supabaseAdmin.from('youtube_analytics_cache').upsert({
+        user_id: GLOBAL_CACHE_USER,
+        data_type: cacheKey,
+        date_range: null,
+        data: cleanData,
+        fetched_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      }, { onConflict: 'user_id,data_type,date_range' });
+    }
 
     return new Response(JSON.stringify({ success: true, data: cleanData }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

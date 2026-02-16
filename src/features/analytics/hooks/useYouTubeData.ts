@@ -17,6 +17,9 @@ export interface YouTubeData {
     reportLoading?: boolean;
     lastFetchedAt?: string; // Timestamp of last data fetch from cache
     isCached?: boolean; // Whether current data is from cache or live API
+    quotaExceeded?: boolean; // Flag for YouTube API quota exhaustion
+    isStale?: boolean; // Data is served from stale cache
+    errorFallback?: boolean; // Generic error fallback to stale data
 }
 
 const MOCK_DATA = {
@@ -67,6 +70,12 @@ const generateMockReportData = () => {
 
 const MOCK_REPORT_DATA = generateMockReportData();
 
+const MOCK_RECENT_VIDEOS = [
+    { id: "1", title: "Cómo Crecer en YouTube 2024", type: "Core", views: 4500, performance: "High", publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(), statistics: { viewCount: "4500" } },
+    { id: "2", title: "Tutorial React Avanzado", type: "Casual", views: 12000, performance: "High", publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(), statistics: { viewCount: "12000" } },
+    { id: "3", title: "Vlog Semanal #45", type: "Core", views: 3200, performance: "Avg", publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10).toISOString(), statistics: { viewCount: "3200" } },
+];
+
 const MOCK_AUDIENCE_DATA = [
     { name: 'Core (Suscriptores)', value: 45, color: '#3b82f6' }, // Blue
     { name: 'Nuevos / Casuales', value: 55, color: '#10b981' }, // Emerald
@@ -82,6 +91,9 @@ export function useYouTubeData() {
         isDemo: false,
         loading: true,
         error: null,
+        quotaExceeded: false,
+        isStale: false,
+        errorFallback: false,
     });
 
     // Report State
@@ -133,14 +145,17 @@ export function useYouTubeData() {
 
     const calculateDateRange = (range: string) => {
         const end = new Date();
-        const start = new Date();
+        // YouTube Analytics data has a 2-3 day delay
+        end.setDate(end.getDate() - 2);
+
+        const start = new Date(end); // Start relative to end
 
         switch (range) {
             case '7d': start.setDate(end.getDate() - 7); break;
             case '28d': start.setDate(end.getDate() - 28); break;
             case '90d': start.setDate(end.getDate() - 90); break;
             case '365d': start.setDate(end.getDate() - 365); break;
-            case 'all': start.setFullYear(2000); break; // Way back
+            case 'all': start.setFullYear(2010); break; // YouTube started in 2005, 2010 is safe
             default: start.setDate(end.getDate() - 28);
         }
         return {
@@ -156,12 +171,14 @@ export function useYouTubeData() {
             try {
                 // Check Supabase Session
                 const { data: { session } } = await supabase.auth.getSession();
+
                 if (!session) {
                     console.log("Analytics: No session, using Demo Mode");
                     setData({ ...MOCK_DATA, isConnected: false, isDemo: true, loading: false, error: null });
                     setTrafficData(MOCK_TRAFFIC_DATA);
                     setReportData(MOCK_REPORT_DATA);
                     setAudienceData(MOCK_AUDIENCE_DATA);
+                    setRecentVideosCCN(MOCK_RECENT_VIDEOS); // Set Mock Videos
                     return;
                 }
 
@@ -174,14 +191,43 @@ export function useYouTubeData() {
                     setData({ ...MOCK_DATA, isConnected: false, isDemo: true, loading: false, error: null });
                     setTrafficData(MOCK_TRAFFIC_DATA);
                     setReportData(MOCK_REPORT_DATA);
+                    setAudienceData(MOCK_AUDIENCE_DATA);
+                    setRecentVideosCCN(MOCK_RECENT_VIDEOS); // Set Mock Videos
                     return;
                 }
 
                 // Fetch Real Data (Stats)
-                const statsData = await integrationsApi.getChannelStats('youtube');
+                let statsData;
+                try {
+                    statsData = await integrationsApi.getChannelStats('youtube');
+                } catch (apiError: any) {
+                    console.warn("[YouTubeData] Stats fetch hard error. Falling back to direct DB cache check.", apiError);
+
+                    const { data: cachedStats } = await (supabase
+                        .from('youtube_analytics_cache' as any)
+                        .select('data, fetched_at')
+                        .eq('user_id', session.user.id)
+                        .eq('data_type', 'stats')
+                        .order('fetched_at', { ascending: false })
+                        .limit(1)
+                        .single()) as any;
+
+                    if (cachedStats) {
+                        statsData = {
+                            stats: cachedStats.data,
+                            cached: true,
+                            fetchedAt: cachedStats.fetched_at,
+                            isStale: true,
+                            errorFallback: true
+                        };
+                    } else {
+                        throw apiError;
+                    }
+                }
 
                 if (statsData && statsData.stats) {
-                    setData({
+                    setData(prev => ({
+                        ...prev,
                         views: Number(statsData.stats.viewCount || 0),
                         subscribers: Number(statsData.stats.subscriberCount || 0),
                         videos: Number(statsData.stats.videoCount || 0),
@@ -190,24 +236,30 @@ export function useYouTubeData() {
                         loading: false,
                         error: null,
                         lastFetchedAt: statsData.fetchedAt,
-                        isCached: statsData.cached
-                    });
+                        isCached: statsData.cached,
+                        quotaExceeded: statsData.quotaExceeded || prev.quotaExceeded,
+                        isStale: statsData.isStale || statsData.errorFallback || prev.isStale,
+                        errorFallback: statsData.errorFallback || prev.errorFallback
+                    }));
                 } else {
-                    throw new Error("Invalid data format");
+                    throw new Error("Invalid stats data format");
                 }
             } catch (err: any) {
                 console.log("Analytics: Connection check failed/incomplete, falling back to Demo Mode", err);
-                // We don't show error to user for auth checks, just show Demo
+                const errorMessage = String(err?.message || err || "");
+                const isQuota = errorMessage.includes("403") || errorMessage.includes("quota");
+
                 setData({
                     ...MOCK_DATA,
                     isConnected: false,
-                    isDemo: true,
-                    loading: false, // Ensure loading is off
-                    error: null // Clear error to avoid scary red text
+                    isDemo: true, // Still true if we fail completely
+                    loading: false,
+                    error: isQuota ? "Cuota de YouTube excedida. Mostrando datos de demostración." : null
                 });
                 setTrafficData(MOCK_TRAFFIC_DATA);
                 setReportData(MOCK_REPORT_DATA);
                 setAudienceData(MOCK_AUDIENCE_DATA);
+                setRecentVideosCCN(MOCK_RECENT_VIDEOS); // Set Mock Videos
             }
         };
 
@@ -229,70 +281,116 @@ export function useYouTubeData() {
                     dimension = 'month';
                 }
 
-                // 1. Main Report & Revenue
-                // Explicitly request metrics WITHOUT revenue to ensure we get full history (no monetization filter)
-                // Overriding backend default.
-                const safeMetrics = 'views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost';
-                const { report } = await integrationsApi.getReports('youtube', startDate, endDate, dimension, safeMetrics);
+                // 1. Grouped Report Fetching to avoid "Incompatible Metrics" errors
+                // Group A: Basic Engagement (Views, Watch Time, AVD, Retention)
+                const groupAMetrics = 'views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage';
+                // Group B: Subscriber Metrics
+                const groupBMetrics = 'subscribersGained,subscribersLost';
+                // Group C: Packaging Metrics (Impressions, CTR)
+                const groupCMetrics = 'impressions,impressionClickThroughRate';
 
-                if (report?.rows) {
-                    // Sanitize: Remove estimatedRevenue if present in Main Report (it's pollution from bad cache)
-                    // We only want revenue from the separate fetch below.
-                    if (report.columnHeaders) {
-                        const dirtyRevIdx = report.columnHeaders.findIndex((h: any) => h.name === 'estimatedRevenue');
-                        if (dirtyRevIdx !== -1) {
-                            report.columnHeaders.splice(dirtyRevIdx, 1);
-                            report.rows.forEach((row: any[]) => row.splice(dirtyRevIdx, 1));
-                        }
+                let finalReport: any = { columnHeaders: [], rows: [] };
+
+                try {
+                    console.log("[YouTubeData] Fetching metric groups...");
+
+                    // Fetch all groups in parallel
+                    const [resA, resB, resC] = await Promise.all([
+                        integrationsApi.getReports('youtube', startDate, endDate, dimension, groupAMetrics).catch(e => ({ report: null, error: e })),
+                        integrationsApi.getReports('youtube', startDate, endDate, dimension, groupBMetrics).catch(e => ({ report: null, error: e })),
+                        integrationsApi.getReports('youtube', startDate, endDate, dimension, groupCMetrics).catch(e => ({ report: null, error: e }))
+                    ]);
+
+                    const reportA = (resA as any).report;
+                    const reportB = (resB as any).report;
+                    const reportC = (resC as any).report;
+
+                    // Update global quota/stale flags if any group returned them
+                    if ((resA as any).quotaExceeded || (resB as any).quotaExceeded || (resC as any).quotaExceeded) {
+                        setData(prev => ({ ...prev, quotaExceeded: true, isStale: true }));
+                    }
+                    if ((resA as any).errorFallback || (resB as any).errorFallback || (resC as any).errorFallback) {
+                        setData(prev => ({ ...prev, errorFallback: true, isStale: true }));
                     }
 
-                    // Separate Revenue Fetching to avoid data truncation
+                    if (reportA?.rows) {
+                        finalReport.columnHeaders = [...reportA.columnHeaders];
+                        finalReport.rows = [...reportA.rows];
+
+                        // Helper to merge another report into finalReport
+                        const mergeReport = (otherReport: any) => {
+                            if (!otherReport?.rows || !otherReport.columnHeaders) return;
+
+                            // Find new headers (skipping the dimension column which is always at 0)
+                            const newHeaders = otherReport.columnHeaders.slice(1);
+                            const startIdx = finalReport.columnHeaders.length;
+                            finalReport.columnHeaders.push(...newHeaders);
+
+                            // Create a map for quick lookup by date
+                            const otherRowsMap = new Map();
+                            otherReport.rows.forEach((row: any[]) => otherRowsMap.set(row[0], row.slice(1)));
+
+                            // Merge into rows
+                            finalReport.rows = finalReport.rows.map((row: any[]) => {
+                                const dateKey = row[0];
+                                const otherData = otherRowsMap.get(dateKey) || new Array(newHeaders.length).fill(0);
+                                return [...row, ...otherData];
+                            });
+                        };
+
+                        mergeReport(reportB);
+                        mergeReport(reportC);
+                    } else if (data.isDemo) {
+                        // Fallback to demo if real fails but we were connected
+                        finalReport = MOCK_REPORT_DATA;
+                    }
+                } catch (reportErr: any) {
+                    console.error("[YouTubeData] Reports fetching failed", reportErr);
+                }
+
+                if (finalReport?.rows?.length > 0) {
+                    const report = finalReport;
+                    // Sanitize: Remove estimatedRevenue if present (pollution check)
+                    const dirtyRevIdx = report.columnHeaders.findIndex((h: any) => h.name === 'estimatedRevenue');
+                    if (dirtyRevIdx !== -1) {
+                        report.columnHeaders.splice(dirtyRevIdx, 1);
+                        report.rows.forEach((row: any[]) => row.splice(dirtyRevIdx, 1));
+                    }
+
+                    // Separate Revenue Fetching (Revenue is often delayed or restricted)
                     try {
                         const { report: revenueReport } = await integrationsApi.getReports(
                             'youtube',
                             startDate,
                             endDate,
-                            dimension, // Match dimension (day or month)
-                            'estimatedRevenue' // Only fetch revenue
+                            dimension,
+                            'estimatedRevenue'
                         );
 
                         if (revenueReport?.rows) {
-                            // Create a map of Date -> Revenue
                             const revenueMap = new Map();
-                            revenueReport.rows.forEach((row: any[]) => {
-                                // Row[0] is date/month (dimension)
-                                revenueMap.set(row[0], row[1]);
-                            });
+                            revenueReport.rows.forEach((row: any[]) => revenueMap.set(row[0], row[1]));
 
-                            // Merge into main report
                             const revHeaderIdx = report.columnHeaders.findIndex((h: any) => h.name === 'estimatedRevenue');
-
                             if (revHeaderIdx !== -1) {
-                                // Header exists, update values in place
                                 report.rows = report.rows.map((row: any[]) => {
-                                    const dateKey = row[0];
-                                    const rev = revenueMap.get(dateKey) || 0;
+                                    const rev = revenueMap.get(row[0]) || 0;
                                     const newRow = [...row];
                                     newRow[revHeaderIdx] = rev;
                                     return newRow;
                                 });
                             } else {
-                                // Header missing, append new column
                                 report.columnHeaders.push({ name: 'estimatedRevenue', columnType: 'METRIC', dataType: 'FLOAT' });
-                                report.rows = report.rows.map((row: any[]) => {
-                                    const dateKey = row[0];
-                                    const rev = revenueMap.get(dateKey) || 0;
-                                    return [...row, rev];
-                                });
+                                report.rows = report.rows.map((row: any[]) => [...row, (revenueMap.get(row[0]) || 0)]);
                             }
                         }
                     } catch (revErr) {
-                        console.warn("[YouTubeData] Failed to fetch revenue report, defaulting to 0", revErr);
+                        console.warn("[YouTubeData] Revenue fetch failed", revErr);
                     }
 
                     setReportData(report);
                 } else {
-                    setReportData(report || { rows: [], error: "No rows found" });
+                    setReportData({ rows: [], error: "No rows found" });
                 }
 
                 // 2. Traffic Sources Report
@@ -372,12 +470,14 @@ export function useYouTubeData() {
                 // 3. Audience Report (CCN Strategy)
                 try {
                     console.log("[YouTubeData] Fetching audience report...");
+                    // Fix: The error said 'day' was missing but required for sort.
+                    // We need to either add 'day' or ensure we aren't sorting by it if not requested.
                     const { report: audienceReport } = await integrationsApi.getReports(
                         'youtube',
                         startDate,
                         endDate,
-                        undefined,
-                        undefined,
+                        'subscribedStatus', // Fix dimension to exactly what we need
+                        'views',
                         'audience'
                     );
 
@@ -466,7 +566,13 @@ export function useYouTubeData() {
 
                 // 5. Recent Videos (CCN Analysis)
                 try {
-                    const { videos } = await integrationsApi.getVideos('youtube', 10, 'date');
+                    const videoResponse = await integrationsApi.getVideos('youtube', 10, 'date');
+                    const videos = videoResponse.videos;
+
+                    if (videoResponse.quotaExceeded) {
+                        setData(prev => ({ ...prev, quotaExceeded: true, isStale: true }));
+                    }
+
                     if (videos) {
                         const processedVideos = videos.map((v: any) => ({
                             id: v.id,

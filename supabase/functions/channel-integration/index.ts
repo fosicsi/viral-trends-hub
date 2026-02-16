@@ -338,73 +338,74 @@ Deno.serve(async (req) => {
                 console.log("Token refreshed successfully.");
             }
 
-            // Fetch Channel Stats from YouTube API
-            const ytRes = await fetch(
-                `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&mine=true`,
-                { headers: { Authorization: `Bearer ${accessToken}` } }
-            );
-            const ytData = await ytRes.json();
-
-            if (!ytRes.ok) {
-                console.error("YouTube API Error:", ytData);
-                return new Response(JSON.stringify({ error: "YouTube API Error", details: ytData }), { status: ytRes.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
-            }
-
-            if (!ytData.items || ytData.items.length === 0) {
-                return new Response(JSON.stringify({ error: "Channel not found" }), { status: 404, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
-            }
-
-            const channel = ytData.items[0];
-            const stats = {
-                title: channel.snippet.title,
-                description: channel.snippet.description,
-                thumbnail: channel.snippet.thumbnails?.default?.url,
-                viewCount: channel.statistics.viewCount,
-                subscriberCount: channel.statistics.subscriberCount,
-                videoCount: channel.statistics.videoCount,
-                hiddenSubscriberCount: channel.statistics.hiddenSubscriberCount
-            };
-
-            // 3. CACHE THE RESULT (for next time)
-            const expiresIn = 15 * 60 * 1000; // 15 minutes
             try {
-                await supabaseAdmin
-                    .from('youtube_analytics_cache')
-                    .upsert({
-                        user_id: user.id,
-                        data_type: 'stats',
-                        date_range: null,
-                        data: stats,
-                        fetched_at: now.toISOString(),
-                        expires_at: new Date(now.getTime() + expiresIn).toISOString(),
-                    }, { onConflict: 'user_id,data_type,date_range' });
-                console.log(`[stats] Cached fresh data for user ${user.id}`);
-            } catch (cacheUpsertError) {
-                console.error("[stats] Failed to cache stats, but continuing", cacheUpsertError);
-                // Don't fail the request if caching fails
+                // Fetch Channel Stats from YouTube API
+                const ytRes = await fetch(
+                    `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&mine=true`,
+                    { headers: { Authorization: `Bearer ${accessToken}` } }
+                );
+                const ytData = await ytRes.json();
+
+                if (ytRes.status === 403 || ytRes.status === 429) {
+                    console.log(`[stats] Quota exceeded for user ${user.id}, attempting fallback to cache`);
+                    const { data: stale } = await supabaseAdmin.from('youtube_analytics_cache').select('data, fetched_at').eq('user_id', user.id).eq('data_type', 'stats').is('date_range', null).order('fetched_at', { ascending: false }).limit(1).single();
+                    if (stale) return new Response(JSON.stringify({ stats: stale.data, cached: true, isStale: true, quotaExceeded: true, fetchedAt: stale.fetched_at }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+                }
+
+                if (!ytRes.ok) {
+                    console.error("YouTube API Error:", ytData);
+                    throw new Error(ytData.error?.message || "YouTube API Error");
+                }
+
+                if (!ytData.items || ytData.items.length === 0) {
+                    throw new Error("Channel not found");
+                }
+
+                const channel = ytData.items[0];
+                const stats = {
+                    title: channel.snippet.title,
+                    description: channel.snippet.description,
+                    thumbnail: channel.snippet.thumbnails?.default?.url,
+                    viewCount: channel.statistics.viewCount,
+                    subscriberCount: channel.statistics.subscriberCount,
+                    videoCount: channel.statistics.videoCount,
+                    hiddenSubscriberCount: channel.statistics.hiddenSubscriberCount
+                };
+
+                // 3. CACHE THE RESULT
+                const expiresIn = 15 * 60 * 1000;
+                await supabaseAdmin.from('youtube_analytics_cache').upsert({
+                    user_id: user.id, data_type: 'stats', date_range: null, data: stats, fetched_at: now.toISOString(), expires_at: new Date(now.getTime() + expiresIn).toISOString(),
+                }, { onConflict: 'user_id,data_type,date_range' });
+
+                return new Response(JSON.stringify({ stats, cached: false, fetchedAt: now.toISOString() }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+
+            } catch (err) {
+                console.error("[stats] Error fetching stats, fallback to last known cache", err);
+                const { data: lastResort } = await supabaseAdmin.from('youtube_analytics_cache').select('data, fetched_at').eq('user_id', user.id).eq('data_type', 'stats').is('date_range', null).order('fetched_at', { ascending: false }).limit(1).single();
+                if (lastResort) return new Response(JSON.stringify({ stats: lastResort.data, cached: true, isStale: true, errorFallback: true, fetchedAt: lastResort.fetched_at }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+                return new Response(JSON.stringify({ error: "Failed to fetch stats and no cache available", details: err instanceof Error ? err.message : String(err) }), { status: 500, headers: dynamicCorsHeaders });
             }
 
-            return new Response(JSON.stringify({
-                stats,
-                cached: false,
-                fetchedAt: now.toISOString()
-            }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+
+
+
         }
 
-        // 6. VIDEOS (YouTube Data API) - Fetch channel videos
+        // 6. VIDEOS (YouTube Data API) - Fetch channel videos with Quota Fallback
         if (action === 'videos') {
             const platform = body.platform || 'google';
-            const maxResults = body.maxResults || 10; // Default 10 videos
-            const order = body.order || 'date'; // 'date', 'viewCount', 'rating'
+            const maxResults = body.maxResults || 10;
+            const order = body.order || 'date';
 
             const supabaseAdmin = createClient(
                 Deno.env.get('SUPABASE_URL') ?? '',
                 Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
             );
 
-            // 1. CHECK CACHE FIRST (cache videos for 1 hour)
-            console.log(`[videos] Checking cache for user ${user.id}, maxResults: ${maxResults}`);
             const cacheKey = `videos_${maxResults}_${order}`;
+
+            // 1. CHECK CACHE FIRST
             const { data: cachedVideos, error: cacheError } = await supabaseAdmin
                 .from('youtube_analytics_cache')
                 .select('data, fetched_at')
@@ -415,20 +416,15 @@ Deno.serve(async (req) => {
                 .single();
 
             if (cachedVideos && !cacheError) {
-                console.log(`[videos] Cache HIT for user ${user.id}`);
                 return new Response(JSON.stringify({
                     videos: cachedVideos.data,
                     cached: true,
                     fetchedAt: cachedVideos.fetched_at
-                }), {
-                    headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' }
-                });
+                }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
             }
 
-            console.log(`[videos] Cache MISS for user ${user.id}, fetching from YouTube API`);
-
-            // 2. Fetch from YouTube Data API if cache miss
-            const { data: integration, error: dbError } = await supabaseAdmin
+            // 2. FETCH FROM API
+            const { data: integration } = await supabaseAdmin
                 .from('user_integrations')
                 .select('access_token, refresh_token, expires_at, platform')
                 .eq('user_id', user.id)
@@ -437,373 +433,241 @@ Deno.serve(async (req) => {
                 .limit(1)
                 .single();
 
-            if (dbError || !integration) {
+            if (!integration) {
                 return new Response(JSON.stringify({ error: "Not connected" }), { status: 404, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
             }
 
             const encryptionKey = Deno.env.get("OAUTH_ENCRYPTION_KEY") || "default-insecure-key";
             let accessToken = await decrypt(integration.access_token, encryptionKey);
-
-            // TOKEN REFRESH LOGIC (same as stats)
             const expiresAt = integration.expires_at ? new Date(integration.expires_at) : new Date(0);
             const now = new Date();
 
             if (expiresAt.getTime() - now.getTime() < 300 * 1000) {
-                console.log("[videos] Token expired or expiring soon. Refreshing...");
+                if (integration.refresh_token) {
+                    const refreshToken = await decrypt(integration.refresh_token, encryptionKey);
+                    const refreshRes = await fetch("https://oauth2.googleapis.com/token", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: new URLSearchParams({
+                            client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
+                            client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
+                            refresh_token: refreshToken,
+                            grant_type: "refresh_token",
+                        }),
+                    });
+                    const refreshData = await refreshRes.json();
+                    if (refreshData.access_token) {
+                        accessToken = refreshData.access_token;
+                        await supabaseAdmin.from('user_integrations').update({
+                            access_token: await encrypt(accessToken, encryptionKey),
+                            expires_at: new Date(Date.now() + (refreshData.expires_in || 3600) * 1000).toISOString(),
+                        }).eq('user_id', user.id).eq('platform', integration.platform);
+                    }
+                }
+            }
 
-                if (!integration.refresh_token) {
-                    return new Response(JSON.stringify({ error: "Token expired and no refresh token" }), { status: 401, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+            try {
+                let uploadsPlaylistId;
+
+                // Try fetching Channel ID/Uploads first (High Cost: 1 unit)
+                const channelRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id,contentDetails&mine=true`, { headers: { Authorization: `Bearer ${accessToken}` } });
+
+                if (channelRes.ok) {
+                    const channelData = await channelRes.json();
+                    uploadsPlaylistId = channelData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+
+                    // Cache the ID indefinitely (it never changes)
+                    if (uploadsPlaylistId) {
+                        await supabaseAdmin.from('youtube_analytics_cache').upsert({
+                            user_id: user.id, data_type: 'uploads_playlist_id', date_range: null, data: { id: uploadsPlaylistId }, fetched_at: now.toISOString(), expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+                        }, { onConflict: 'user_id,data_type,date_range' });
+                    }
+                } else if (channelRes.status === 403 || channelRes.status === 429) {
+                    // Quota fallback for ID
+                    console.log("[videos] Quota on channels list, trying to fetch cached Playlist ID");
+                    const { data: cachedId } = await supabaseAdmin.from('youtube_analytics_cache').select('data').eq('user_id', user.id).eq('data_type', 'uploads_playlist_id').single();
+                    if (cachedId?.data?.id) {
+                        uploadsPlaylistId = cachedId.data.id;
+                    } else {
+                        // Full Fallback if we can't even get the ID
+                        const { data: stale } = await supabaseAdmin.from('youtube_analytics_cache').select('data, fetched_at').eq('user_id', user.id).eq('data_type', cacheKey).order('fetched_at', { ascending: false }).limit(1).single();
+                        if (stale) return new Response(JSON.stringify({ videos: stale.data, cached: true, isStale: true, quotaExceeded: true, fetchedAt: stale.fetched_at }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+                        return new Response(JSON.stringify({ videos: [], quotaExceeded: true, noCache: true, isStale: false }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+                    }
+                } else {
+                    throw new Error(`Channel fetch failed: ${channelRes.status}`);
                 }
 
-                const refreshToken = await decrypt(integration.refresh_token, encryptionKey);
-                const clientId = Deno.env.get("GOOGLE_CLIENT_ID");
-                const clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
+                if (!uploadsPlaylistId) throw new Error("No uploads playlist ID found");
 
-                const refreshRes = await fetch("https://oauth2.googleapis.com/token", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body: new URLSearchParams({
-                        client_id: clientId!,
-                        client_secret: clientSecret!,
-                        refresh_token: refreshToken,
-                        grant_type: "refresh_token",
-                    }),
-                });
+                // Get Playlist Items
+                const videosRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${uploadsPlaylistId}&maxResults=${maxResults}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+                const videosData = await videosRes.json();
 
-                const refreshData = await refreshRes.json();
-                if (!refreshData.access_token) {
-                    return new Response(JSON.stringify({ error: "Token refresh failed" }), { status: 401, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+                if (videosRes.status === 403 || videosRes.status === 429) {
+                    const { data: stale } = await supabaseAdmin.from('youtube_analytics_cache').select('data, fetched_at').eq('user_id', user.id).eq('data_type', cacheKey).order('fetched_at', { ascending: false }).limit(1).single();
+                    if (stale) return new Response(JSON.stringify({ videos: stale.data, cached: true, isStale: true, quotaExceeded: true, fetchedAt: stale.fetched_at }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+                    return new Response(JSON.stringify({ videos: [], quotaExceeded: true, noCache: true }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
                 }
 
-                accessToken = refreshData.access_token;
+                const videoIds = videosData.items.map((item: any) => item.contentDetails.videoId).join(',');
 
-                // Update DB with new token
-                const newExpiresAt = new Date(Date.now() + (refreshData.expires_in || 3600) * 1000);
-                await supabaseAdmin.from('user_integrations').update({
-                    access_token: await encrypt(accessToken, encryptionKey),
-                    expires_at: newExpiresAt.toISOString(),
-                }).eq('user_id', user.id).eq('platform', integration.platform);
+                // Get Video Details
+                const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoIds}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+                const detailsData = await detailsRes.json();
+
+                if (detailsRes.status === 403 || detailsRes.status === 429) {
+                    const { data: stale } = await supabaseAdmin.from('youtube_analytics_cache').select('data, fetched_at').eq('user_id', user.id).eq('data_type', cacheKey).order('fetched_at', { ascending: false }).limit(1).single();
+                    if (stale) return new Response(JSON.stringify({ videos: stale.data, cached: true, isStale: true, quotaExceeded: true, fetchedAt: stale.fetched_at }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+                    return new Response(JSON.stringify({ videos: [], quotaExceeded: true, noCache: true }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+                }
+
+                // Cache success
+                await supabaseAdmin.from('youtube_analytics_cache').upsert({
+                    user_id: user.id, data_type: cacheKey, date_range: null, data: detailsData.items, fetched_at: now.toISOString(), expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString()
+                }, { onConflict: 'user_id,data_type,date_range' });
+
+                return new Response(JSON.stringify({ videos: detailsData.items, cached: false, fetchedAt: now.toISOString() }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+
+            } catch (err) {
+                console.error("[videos] Fallback to last resort", err);
+                const { data: lastResort } = await supabaseAdmin.from('youtube_analytics_cache').select('data, fetched_at').eq('user_id', user.id).eq('data_type', cacheKey).order('fetched_at', { ascending: false }).limit(1).single();
+                if (lastResort) return new Response(JSON.stringify({ videos: lastResort.data, cached: true, isStale: true, errorFallback: true, fetchedAt: lastResort.fetched_at }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+                return new Response(JSON.stringify({ error: "Failed and no cache available" }), { status: 500, headers: dynamicCorsHeaders });
             }
-
-            // 3. FETCH VIDEOS from YouTube Data API v3
-            // First get channel ID
-            const channelRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&mine=true`, {
-                headers: { Authorization: `Bearer ${accessToken}` }
-            });
-
-            const channelData = await channelRes.json();
-            if (channelData.error || !channelData.items || channelData.items.length === 0) {
-                console.error("[videos] Channel fetch error:", channelData.error);
-                return new Response(JSON.stringify({ error: "Failed to fetch channel", details: channelData.error }), {
-                    status: channelRes.status,
-                    headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' }
-                });
-            }
-
-            const channelId = channelData.items[0].id;
-
-            // Now fetch videos using search endpoint
-            const videosRes = await fetch(
-                `https://www.googleapis.com/youtube/v3/search?` +
-                `part=snippet&channelId=${channelId}&type=video&order=${order}&maxResults=${maxResults}`,
-                { headers: { Authorization: `Bearer ${accessToken}` } }
-            );
-
-            const videosData = await videosRes.json();
-            if (videosData.error) {
-                console.error("[videos] Videos fetch error:", videosData.error);
-                return new Response(JSON.stringify({ error: "Failed to fetch videos", details: videosData.error }), {
-                    status: videosRes.status,
-                    headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' }
-                });
-            }
-
-            // Extract video IDs and fetch full details (to get duration, stats, etc.)
-            const videoIds = videosData.items.map((item: any) => item.id.videoId).join(',');
-
-            const videoDetailsRes = await fetch(
-                `https://www.googleapis.com/youtube/v3/videos?` +
-                `part=snippet,contentDetails,statistics&id=${videoIds}`,
-                { headers: { Authorization: `Bearer ${accessToken}` } }
-            );
-
-            const videoDetailsData = await videoDetailsRes.json();
-            if (videoDetailsData.error) {
-                console.error("[videos] Video details fetch error:", videoDetailsData.error);
-                return new Response(JSON.stringify({ error: "Failed to fetch video details", details: videoDetailsData.error }), {
-                    status: videoDetailsRes.status,
-                    headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' }
-                });
-            }
-
-            // 4. CACHE THE RESULT (1 hour TTL)
-            const cacheExpiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-            await supabaseAdmin.from('youtube_analytics_cache').upsert({
-                user_id: user.id,
-                data_type: cacheKey,
-                date_range: null,
-                data: videoDetailsData.items,
-                fetched_at: now.toISOString(),
-                expires_at: cacheExpiresAt.toISOString()
-            }, { onConflict: 'user_id,data_type,date_range' });
-
-            return new Response(JSON.stringify({
-                videos: videoDetailsData.items,
-                cached: false,
-                fetchedAt: now.toISOString()
-            }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
         }
 
-        // 7. REPORTS (YouTube Analytics) - Cache-First Strategy
+        // 7. REPORTS (YouTube Analytics) - Cache-First & Quota Fallback
         if (action === 'reports' || action === 'get_reports') {
+            const { startDate, endDate, dimensions, metrics, reportType, filters } = body;
             const platform = body.platform || 'google';
-            const { startDate, endDate, dimensions, metrics, reportType } = body;
 
             if (!startDate || !endDate) {
-                return new Response(JSON.stringify({ error: "Missing startDate or endDate" }), { status: 400, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+                return new Response(JSON.stringify({ error: "Missing dates" }), { status: 400, headers: dynamicCorsHeaders });
             }
 
-            const supabaseAdmin = createClient(
-                Deno.env.get('SUPABASE_URL') ?? '',
-                Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-            );
-
-            // Determine the date range for cache key
-            // FIXED: Instead of approximating the range from diff days, we calculate CANONICAL dates
-            // This ensures:
-            // 1. Each range (7d, 28d, etc.) always uses consistent start/end dates
-            // 2. Cache invalidates naturally when the day changes
-            // 3. No overlap between different ranges
+            const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
             const calculateRangeKey = (start: string, end: string): string | null => {
-                const startDate = new Date(start);
-                const endDate = new Date(end);
-                const diffDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-
-                // Map to closest standard range
-                if (diffDays <= 8) return '7d';
-                if (diffDays <= 30) return '28d';
-                if (diffDays <= 95) return '90d';
-                if (diffDays <= 370) return '365d';
-                return 'all';
+                const s = new Date(start); const e = new Date(end);
+                const diff = Math.floor((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24));
+                if (diff <= 3) return '2d'; if (diff <= 8) return '7d'; if (diff <= 30) return '28d'; if (diff <= 95) return '90d'; if (diff <= 370) return '365d'; return 'all';
             };
 
-            // Calculate the canonical startDate and endDate for this range
-            // This ensures that cache entries for the same "logical range" (e.g., "7d") 
-            // always map to the same dates (e.g., "2026-02-03 to 2026-02-10")
             const getCanonicalDates = (rangeKey: string): { start: string, end: string } => {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0); // Normalize to start of day
-
-                const endDate = new Date(today);
-                const startDate = new Date(today);
-
+                const today = new Date(); today.setHours(0, 0, 0, 0); today.setDate(today.getDate() - 2);
+                const end = new Date(today); const start = new Date(today);
                 switch (rangeKey) {
-                    case '7d': startDate.setDate(today.getDate() - 7); break;
-                    case '28d': startDate.setDate(today.getDate() - 28); break;
-                    case '90d': startDate.setDate(today.getDate() - 90); break;
-                    case '365d': startDate.setDate(today.getDate() - 365); break;
-                    case 'all':
-                        // FIXED: Use first day of first month to align with 'month' dimension requirement
-                        startDate.setFullYear(2005, 0, 1); // Jan 1, 2005 (YouTube launch)
-                        break;
+                    case '2d': start.setDate(today.getDate() - 1); break;
+                    case '7d': start.setDate(today.getDate() - 7); break;
+                    case '28d': start.setDate(today.getDate() - 28); break;
+                    case '90d': start.setDate(today.getDate() - 90); break;
+                    case '365d': start.setDate(today.getDate() - 365); break;
+                    case 'all': start.setFullYear(2012, 0, 1); break;
                 }
-
-                return {
-                    start: startDate.toISOString().split('T')[0],
-                    end: endDate.toISOString().split('T')[0]
-                };
+                return { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0] };
             };
 
-            const dateRangeKey = calculateRangeKey(startDate, endDate);
-            const canonicalDates = dateRangeKey ? getCanonicalDates(dateRangeKey) : null;
+            const rangeKey = calculateRangeKey(startDate, endDate);
+            const canonical = rangeKey ? getCanonicalDates(rangeKey) : { start: startDate, end: endDate };
+            const cacheType = reportType || 'reports';
 
-            // Use canonical dates for cache lookup
-            // This ensures that requests for "last 7 days" on different times of the same day
-            // all hit the same cache entry
-            const cacheDataType = reportType || 'reports';
-
-            // 1. CHECK CACHE FIRST (using canonical dates)
-            console.log(`[reports] Checking cache for user ${user.id}, type: ${cacheDataType}, range: ${dateRangeKey}, canonical: ${canonicalDates?.start} to ${canonicalDates?.end}`);
-            const { data: cachedReport, error: cacheError } = await supabaseAdmin
-                .from('youtube_analytics_cache')
-                .select('data, fetched_at')
-                .eq('user_id', user.id)
-                .eq('data_type', cacheDataType)
-                .eq('date_range', dateRangeKey)
-                .gte('expires_at', new Date().toISOString())
-                .single();
-
-            if (cachedReport && !cacheError) {
-                console.log(`[reports] Cache HIT for user ${user.id}, type: ${cacheDataType}, fetched at ${cachedReport.fetched_at}`);
-                return new Response(JSON.stringify({
-                    report: cachedReport.data,
-                    cached: true,
-                    fetchedAt: cachedReport.fetched_at
-                }), {
-                    headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' }
-                });
+            // Check Cache
+            if (!filters) {
+                const { data: cached } = await supabaseAdmin.from('youtube_analytics_cache').select('data, fetched_at').eq('user_id', user.id).eq('data_type', cacheType).eq('date_range', rangeKey).gte('expires_at', new Date().toISOString()).single();
+                if (cached) return new Response(JSON.stringify({ report: cached.data, cached: true, fetchedAt: cached.fetched_at }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
             }
 
-            console.log(`[reports] Cache MISS for user ${user.id}, fetching from YouTube API`);
-
-            // 2. FALLBACK: Fetch from YouTube API if cache miss or expired
-            // Fetch integration with Token and Expiration
-            const { data: integration, error: dbError } = await supabaseAdmin
-                .from('user_integrations')
-                .select('access_token, refresh_token, expires_at, platform')
-                .eq('user_id', user.id)
-                .in('platform', [platform, 'google', 'youtube'])
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .single();
-
-            if (dbError || !integration) {
-                return new Response(JSON.stringify({ error: "Not connected" }), { status: 404, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
-            }
+            // Fetch Integration
+            const { data: integration } = await supabaseAdmin.from('user_integrations').select('access_token, refresh_token, expires_at, platform').eq('user_id', user.id).in('platform', [platform, 'google', 'youtube']).order('created_at', { ascending: false }).limit(1).single();
+            if (!integration) return new Response(JSON.stringify({ error: "Not connected" }), { status: 404, headers: dynamicCorsHeaders });
 
             const encryptionKey = Deno.env.get("OAUTH_ENCRYPTION_KEY") || "default-insecure-key";
             let accessToken = await decrypt(integration.access_token, encryptionKey);
-
-            // TOKEN REFRESH LOGIC (Duplicated for safety/speed)
             const expiresAt = integration.expires_at ? new Date(integration.expires_at) : new Date(0);
             const now = new Date();
 
             if (expiresAt.getTime() - now.getTime() < 300 * 1000) {
-                console.log("Token expiring soon (reports). Refreshing...");
-
-                if (!integration.refresh_token) {
-                    return new Response(JSON.stringify({ error: "Token expired and no refresh token" }), { status: 401, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+                if (integration.refresh_token) {
+                    const refreshToken = await decrypt(integration.refresh_token, encryptionKey);
+                    const refreshRes = await fetch("https://oauth2.googleapis.com/token", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: new URLSearchParams({
+                            client_id: Deno.env.get("GOOGLE_CLIENT_ID")!, client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!, refresh_token: refreshToken, grant_type: "refresh_token",
+                        }),
+                    });
+                    const refreshData = await refreshRes.json();
+                    if (refreshData.access_token) {
+                        accessToken = refreshData.access_token;
+                        await supabaseAdmin.from('user_integrations').update({ access_token: await encrypt(accessToken, encryptionKey), expires_at: new Date(Date.now() + (refreshData.expires_in || 3600) * 1000).toISOString() }).eq('user_id', user.id).eq('platform', integration.platform);
+                    }
                 }
-
-                const refreshToken = await decrypt(integration.refresh_token, encryptionKey);
-                const clientId = Deno.env.get("GOOGLE_CLIENT_ID");
-                const clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
-
-                const refreshRes = await fetch("https://oauth2.googleapis.com/token", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body: new URLSearchParams({
-                        client_id: clientId!,
-                        client_secret: clientSecret!,
-                        refresh_token: refreshToken,
-                        grant_type: "refresh_token",
-                    }),
-                });
-
-                const refreshData = await refreshRes.json();
-                if (!refreshData.access_token) {
-                    console.error("Failed to refresh token", refreshData);
-                    return new Response(JSON.stringify({ error: "Failed to refresh token" }), { status: 401, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
-                }
-
-                accessToken = refreshData.access_token;
-                const newEncryptedAccessToken = await encrypt(refreshData.access_token, encryptionKey);
-                const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
-
-                const updatePayload: any = { access_token: newEncryptedAccessToken, expires_at: newExpiresAt, updated_at: new Date().toISOString() };
-                if (refreshData.refresh_token) updatePayload.refresh_token = await encrypt(refreshData.refresh_token, encryptionKey);
-
-                await supabaseAdmin.from('user_integrations').update(updatePayload).eq('user_id', user.id).eq('platform', integration.platform);
             }
 
-            // Define metrics and dimensions based on reportType
-            let reportMetrics = metrics || 'views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost';
-            let reportDims = dimensions || 'day';
-            let sort = 'day';
+            let rMetrics = metrics || 'views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost';
+            let rDims = dimensions || 'day';
+            let sort = (rDims.includes('day') || rDims.includes('month')) ? rDims : '-views';
 
             if (reportType === 'audience') {
-                reportMetrics = 'views,averageViewDuration,averageViewPercentage';
-                reportDims = dimensions || 'subscribedStatus'; // Allow override, default to subscribedStatus
-                sort = '-views';
+                rMetrics = metrics || 'views,averageViewDuration,averageViewPercentage';
+                rDims = dimensions || 'subscribedStatus';
+                sort = rDims.includes('day') ? 'day' : (rDims.includes('month') ? 'month' : '-views');
             } else if (reportType === 'traffic') {
-                reportDims = 'insightTrafficSourceType';
-                reportMetrics = 'views,estimatedMinutesWatched';
-                sort = '-views';
+                rDims = dimensions || 'insightTrafficSourceType';
+                rMetrics = metrics || 'views,estimatedMinutesWatched';
+                sort = rDims.includes('day') ? 'day' : (rDims.includes('month') ? 'month' : '-views');
             }
-
-            // FIXED: Use canonical dates for the YouTube API call, not the frontend-provided dates
-            // This ensures that all requests for "7d" on the same day fetch the SAME data
-            // and can share the same cache entry
-            const apiStartDate = canonicalDates?.start || startDate;
-            const apiEndDate = canonicalDates?.end || endDate;
 
             const queryParams = new URLSearchParams({
-                ids: 'channel==MINE',
-                startDate: apiStartDate,
-                endDate: apiEndDate,
-                metrics: reportMetrics,
-                dimensions: reportDims,
-                sort: sort
+                ids: 'channel==MINE', startDate: canonical.start, endDate: canonical.end, metrics: rMetrics, dimensions: rDims, sort: sort
             });
+            if (filters) queryParams.set('filters', filters);
 
-            console.log(`[get_reports] Fetching with canonical params: ${queryParams.toString()}`);
-
-            const ytRes = await fetch(
-                `https://youtubeanalytics.googleapis.com/v2/reports?${queryParams.toString()}`,
-                { headers: { Authorization: `Bearer ${accessToken}` } }
-            );
-
-            const ytData = await ytRes.json();
-
-            if (ytData.error) {
-                console.error("[get_reports] API Error Body:", ytData);
-            } else {
-                console.log(`[get_reports] Success. Rows count: ${ytData?.rows?.length || 0}`);
-            }
-
-            if (!ytRes.ok) {
-                console.error("YouTube Analytics API Error:", ytData);
-                return new Response(JSON.stringify({ error: "Analytics API Error", details: ytData }), { status: ytRes.status, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
-            }
-
-            // 3. CACHE THE RESULT (for next time)
-            const expiresIn = 30 * 60 * 1000; // 30 minutes
             try {
-                await supabaseAdmin
-                    .from('youtube_analytics_cache')
-                    .upsert({
-                        user_id: user.id,
-                        data_type: cacheDataType,
-                        date_range: dateRangeKey,
-                        data: ytData,
-                        fetched_at: now.toISOString(),
-                        expires_at: new Date(now.getTime() + expiresIn).toISOString(),
-                    }, { onConflict: 'user_id,data_type,date_range' });
-                console.log(`[reports] Cached fresh data for user ${user.id}, type: ${cacheDataType}`);
-            } catch (cacheUpsertError) {
-                console.error("[reports] Failed to cache report, but continuing", cacheUpsertError);
-                // Don't fail the request if caching fails
-            }
+                const apiRes = await fetch(`https://youtubeanalytics.googleapis.com/v1/reports?${queryParams.toString()}`, { headers: { Authorization: `Bearer ${accessToken}` } });
 
-            return new Response(JSON.stringify({
-                report: ytData,
-                cached: false,
-                fetchedAt: now.toISOString()
-            }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+                if (apiRes.status === 403 || apiRes.status === 429) {
+                    const { data: stale } = await supabaseAdmin.from('youtube_analytics_cache').select('data, fetched_at').eq('user_id', user.id).eq('data_type', cacheType).eq('date_range', rangeKey).order('fetched_at', { ascending: false }).limit(1).single();
+                    if (stale) return new Response(JSON.stringify({ report: stale.data, cached: true, isStale: true, quotaExceeded: true, fetchedAt: stale.fetched_at }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+
+                    // Return empty 200 with quota flag
+                    return new Response(JSON.stringify({ report: { columnHeaders: [], rows: [] }, quotaExceeded: true, noCache: true }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+                }
+
+                const reportData = await apiRes.json();
+                if (reportData.error) throw new Error(JSON.stringify(reportData.error));
+
+                if (!filters) {
+                    await supabaseAdmin.from('youtube_analytics_cache').upsert({
+                        user_id: user.id, data_type: cacheType, date_range: rangeKey, data: reportData, fetched_at: now.toISOString(), expires_at: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString()
+                    }, { onConflict: 'user_id,data_type,date_range' });
+                }
+
+                return new Response(JSON.stringify({ report: reportData, cached: false, fetchedAt: now.toISOString() }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+
+            } catch (err) {
+                console.error("[reports] Error, fallback to cache", err);
+                const { data: lastResort } = await supabaseAdmin.from('youtube_analytics_cache').select('data, fetched_at').eq('user_id', user.id).eq('data_type', cacheType).eq('date_range', rangeKey).order('fetched_at', { ascending: false }).limit(1).single();
+                if (lastResort) return new Response(JSON.stringify({ report: lastResort.data, cached: true, isStale: true, errorFallback: true, fetchedAt: lastResort.fetched_at }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+                return new Response(JSON.stringify({ error: "Failed and no cache available" }), { status: 500, headers: dynamicCorsHeaders });
+            }
         }
 
-        // 5. DISCONNECT
+        // 8. DISCONNECT
         if (action === 'disconnect') {
             const { platform } = body;
-            const { error } = await supabaseClient
-                .from('user_integrations')
-                .delete()
-                .eq('user_id', user.id)
-                .eq('platform', platform);
-
+            const { error } = await supabaseClient.from('user_integrations').delete().eq('user_id', user.id).eq('platform', platform);
             if (error) throw error;
             return new Response(JSON.stringify({ success: true }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
         }
 
-        throw new Error(`Unknown action: ${action}`);
+        // Catch-all for unknown actions
+        return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), { status: 400, headers: dynamicCorsHeaders });
 
     } catch (error) {
-        console.error(error);
-        return new Response(JSON.stringify({ error: error.message }), {
-            headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' },
-            status: 400,
-        })
+        console.error("Critical Error:", error);
+        return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Internal Server Error" }), { status: 500, headers: dynamicCorsHeaders });
     }
 })
 // Force redeploy Mon Feb  9 00:52:53 -03 2026

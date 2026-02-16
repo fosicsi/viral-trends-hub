@@ -29,9 +29,10 @@ function MetricDisplay({ label, value, vsAvg, trend }: MetricDisplayProps) {
 interface LastVideoPerformanceProps {
     analysis: LastVideoAnalysis | null;
     isLoading?: boolean;
+    quotaExceeded?: boolean;
 }
 
-export function LastVideoPerformance({ analysis, isLoading }: LastVideoPerformanceProps) {
+export function LastVideoPerformance({ analysis, isLoading, quotaExceeded }: LastVideoPerformanceProps) {
     if (isLoading) {
         return (
             <Card className="border-l-4 border-l-blue-500">
@@ -48,6 +49,29 @@ export function LastVideoPerformance({ analysis, isLoading }: LastVideoPerforman
     }
 
     if (!analysis) {
+        if (quotaExceeded) {
+            return (
+                <Card className="border-l-4 border-l-amber-500 bg-amber-50/50">
+                    <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                            <AlertCircle className="w-5 h-5 text-amber-500" />
+                            Último Video (No disponible)
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-center py-6 text-amber-800/80">
+                            <p className="text-sm font-medium">Límite de cuota de YouTube alcanzado.</p>
+                            <p className="text-xs mt-1">
+                                No podemos obtener los detalles de tu último video en este momento.
+                                <br />
+                                Vuelve a intentarlo mañana cuando se renueve la cuota diaria.
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+            );
+        }
+
         return (
             <Card className="border-l-4 border-l-gray-300">
                 <CardHeader>

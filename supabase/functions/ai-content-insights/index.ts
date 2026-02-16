@@ -33,6 +33,7 @@ interface OutlierVideo {
 
 interface AIResponse {
     recommendations: any[]; // Defined in plan
+    checklist?: any[]; // Optional checklist
     confidence: number;
 }
 
@@ -301,7 +302,15 @@ async function callAI(prompt: string, apiKey: string): Promise<AIResponse> {
             }
 
             console.log(`Success with model: ${model}`);
-            return JSON.parse(text);
+
+            try {
+                return cleanAndParseJSON(text); // Use helper
+            } catch (jsonError) {
+                console.warn(`JSON Parse Error with model ${model}:`, jsonError);
+                console.log("Raw Text:", text);
+                lastError = `JSON Parse Error: ${jsonError.message}`;
+                continue; // Try next model if JSON is bad
+            }
 
         } catch (e) {
             console.error(`Fetch error with model ${model}:`, e);
@@ -312,7 +321,24 @@ async function callAI(prompt: string, apiKey: string): Promise<AIResponse> {
     throw new Error(`All AI models failed. Last error: ${lastError}`);
 }
 
-// --- Helpers: Validation ---
+// --- Helpers: Validation & Utilities ---
+
+function cleanAndParseJSON(text: string): any {
+    // 1. Remove Markdown code blocks (```json ... ```)
+    let cleanText = text.replace(/```json\s*|\s*```/g, '');
+
+    // 2. Remove generic markdown code blocks (``` ... ```) if step 1 didn't catch them
+    cleanText = cleanText.replace(/```/g, '');
+
+    // 3. Trim whitespace
+    cleanText = cleanText.trim();
+
+    // 4. Handle "Unterminated string" sometimes caused by newlines in strings NOT escaped
+    // This is hard to fix perfectly with regex, but we can try to catch common specific issues if needed.
+    // For now, standard parse.
+
+    return JSON.parse(cleanText);
+}
 
 function validateRecommendationAlignment(recommendations: any[], identity: any) {
     console.log("Validating recommendations against identity:", identity.tema_principal);
@@ -350,42 +376,60 @@ Deno.serve(async (req) => {
 
     try {
         // Initialize Admin Client (Bypass RLS, Manual Auth Check)
-        const supabaseAdmin = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        );
+        const supabaseUrl = Deno.env.get('SUPABASE_URL');
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-        // 1. Auth Check - Manual Token Verification
+        if (!supabaseUrl || !supabaseKey) {
+            console.error("🚨 Critical: Missing Supabase Env Vars", {
+                url: !!supabaseUrl,
+                key: !!supabaseKey
+            });
+            throw new Error("Server Configuration Error: Missing Env Vars");
+        }
+
+        const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+
+        // 1. Auth Check - Manual Token Verification (Robust Debugging)
         const authHeader = req.headers.get('Authorization');
         if (!authHeader) {
+            console.error("Missing Authorization header");
             throw new Error('Missing Authorization header');
         }
 
         const token = authHeader.replace('Bearer ', '');
+
+        // Use Admin to verify user (uses Service Role Key)
         const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
 
         if (userError || !user) {
             console.error("Auth Error:", userError);
-            return new Response(JSON.stringify({ error: 'Unauthorized', details: userError }), {
+            return new Response(JSON.stringify({
+                error: 'Unauthorized',
+                details: userError
+            }), {
                 status: 401,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
         }
         console.log("User authenticated:", user.id);
 
+
         // Use supabaseAdmin for all subsequent calls to avoid RLS issues
         const supabaseClient = supabaseAdmin;
 
         // Detect Body Params
         let forceRefresh = false;
+        let forceSearch = false; // New flag for "Deep Search" vs "Smart Refresh"
         try {
             const body = await req.json();
             forceRefresh = !!body.forceRefresh;
+            forceSearch = !!body.forceSearch;
         } catch {
             // No body or invalid JSON
         }
 
         // 2. Cache Check (Only if not forceRefresh)
+        // If forceRefresh is TRUE but forceSearch is FALSE, we want to RE-GENERATE strategy but REUSE data.
         if (!forceRefresh) {
             const { data: existingInsight } = await supabaseClient
                 .from('ai_content_insights')
@@ -399,6 +443,7 @@ Deno.serve(async (req) => {
             if (existingInsight) {
                 return new Response(JSON.stringify({
                     recommendations: existingInsight.recommendations,
+                    checklist: existingInsight.checklist, // Ensure checklist is returned from cache too
                     cached: true
                 }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
@@ -444,18 +489,44 @@ Deno.serve(async (req) => {
             });
         }
 
-        // Use user keywords for search
-        const searchQueries = userAnalytics.nicheKeywords.length > 0
-            ? userAnalytics.nicheKeywords
-            : ["vlogs de viajes", "curiosidades mundo", "trucos vida", "viral shorts"];
+        // --- SMART REFRESH LOGIC ---
+        let outliers: OutlierVideo[] = [];
 
-        // Add some generic high-potential queries but avoid the tech/finance bias
-        searchQueries.push("viral trending 2024", "outlier video ideas");
+        // If NOT forcing a deep search, try to reuse recent outliers from DB
+        if (!forceSearch) {
+            const { data: recentEntry } = await supabaseClient
+                .from('ai_content_insights')
+                .select('viral_outliers')
+                .eq('user_id', user.id)
+                .neq('viral_outliers', null) // Ensure not null
+                //.gt('generated_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // Within 24h? Or just latest is fine?
+                .order('generated_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
 
-        const youtubeKey = Deno.env.get("YOUTUBE_API_KEY")!; // Server Key
-        // Ideally we use User Token if available to avoid quota limits, but server key is easier for background job
+            if (recentEntry?.viral_outliers && Array.isArray(recentEntry.viral_outliers) && recentEntry.viral_outliers.length > 0) {
+                console.log("♻️ SMART REFRESH: Reusing cached outliers to save API Quota.");
+                outliers = recentEntry.viral_outliers;
+            }
+        }
 
-        const outliers = await searchOutliers(searchQueries, youtubeKey);
+        // If we still don't have outliers (either forceSearch=true OR no cache found), fetch from YouTube
+        if (outliers.length === 0) {
+            console.log("🔍 DEEP SEARCH: Fetching fresh videos from YouTube API...");
+
+            // Use user keywords for search
+            const searchQueries = userAnalytics.nicheKeywords.length > 0
+                ? userAnalytics.nicheKeywords
+                : ["vlogs de viajes", "curiosidades mundo", "trucos vida", "viral shorts"];
+
+            // Add some generic high-potential queries but avoid the tech/finance bias
+            searchQueries.push("viral trending 2024", "outlier video ideas");
+
+            const youtubeKey = Deno.env.get("YOUTUBE_API_KEY")!; // Server Key
+            outliers = await searchOutliers(searchQueries, youtubeKey);
+        } else {
+            console.log(`✅ Skipped YouTube API Search. Using ${outliers.length} cached videos.`);
+        }
 
         // NEW: Validation Logic (Basic)
         // We want to ensure recommendations are aligned.
@@ -538,6 +609,16 @@ Deno.serve(async (req) => {
             4. **Accionable**: El checklist debe atacar las debilidades numéricas (CTR bajo, Retención baja, etc).
         `;
 
+        // LOGGING FOR DEBUGGING BIAS
+        console.log("--- DEBUG: Full Prompt sent to AI ---");
+        console.log(prompt);
+        console.log("-------------------------------------");
+
+        // Runtime check for hardcoded bias against user's specific case
+        if (prompt.includes("@magicaescocia")) {
+            console.error("🚨 CRITICAL ALERT: Hardcoded string '@magicaescocia' detected in prompt! Review Code Immediately.");
+        }
+
         // 5. Call AI (OpenRouter / Groq / OpenAI)
         const aiApiKey = Deno.env.get("GEMINI_API_KEY")!;
         const aiResult = await callAI(prompt, aiApiKey);
@@ -558,7 +639,7 @@ Deno.serve(async (req) => {
         const { error: insertError } = await supabaseClient.from('ai_content_insights').insert({
             user_id: user.id,
             channel_stats: userAnalytics,
-            viral_outliers: outliers,
+            viral_outliers: outliers, // Save whatever we used (new or cached)
             recommendations: payloadToSave, // Saving object now
             confidence_score: aiResult.confidence,
             expires_at: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString() // 6 hours

@@ -13,9 +13,10 @@ export default function OnboardingGuard({ children }: { children: React.ReactNod
         const checkConnection = async () => {
             try {
                 const { data: { session } } = await supabase.auth.getSession();
+                console.log("[OnboardingGuard] Session check:", !!session);
 
                 if (!session) {
-                    // Not logged in, redirect to auth (unless already there)
+                    console.log("[OnboardingGuard] No session, redirecting to /auth");
                     if (location.pathname !== '/auth') {
                         navigate('/auth');
                     }
@@ -23,21 +24,27 @@ export default function OnboardingGuard({ children }: { children: React.ReactNod
                 }
 
                 // Logged in, check integrations
+                console.log("[OnboardingGuard] Fetching integrations...");
                 const { data: integrations } = await integrationsApi.getStatus();
+                console.log("[OnboardingGuard] Integrations found:", integrations?.length || 0, integrations);
+
                 const hasYoutube = integrations?.some(i => i.platform === 'youtube' || i.platform === 'google');
+                console.log("[OnboardingGuard] hasYoutube:", hasYoutube);
 
                 if (hasYoutube) {
+                    console.log("[OnboardingGuard] Connected, status -> connected");
                     setStatus('connected');
                 } else {
+                    console.log("[OnboardingGuard] Not connected, status -> onboarding");
                     setStatus('onboarding');
                     // If not on onboarding page, redirect
                     if (location.pathname !== '/onboarding') {
+                        console.log("[OnboardingGuard] Redirecting to /onboarding");
                         navigate('/onboarding');
                     }
                 }
             } catch (error) {
-                console.error("Guard connection check failed:", error);
-                // Fallback to onboarding if we can't verify connection
+                console.error("[OnboardingGuard] Error:", error);
                 setStatus('onboarding');
                 if (location.pathname !== '/onboarding') {
                     navigate('/onboarding');
@@ -62,6 +69,13 @@ export default function OnboardingGuard({ children }: { children: React.ReactNod
     // If we're on the onboarding path and connected, go home
     if (status === 'connected' && location.pathname === '/onboarding') {
         navigate('/');
+        return null;
+    }
+
+    // IMPORTANT: If we are NOT connected and NOT on the onboarding page, 
+    // we should NOT render the children (the dashboard) while the navigation is pending.
+    if (status === 'onboarding' && location.pathname !== '/onboarding') {
+        console.log("[OnboardingGuard] Blocking render, redirecting...");
         return null;
     }
 

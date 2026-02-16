@@ -95,35 +95,42 @@ export function MorningDashboard({
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session) { setStatsLoading(false); return; }
 
-                // Use a 7-day window (reliable, has cache), but only sum last 3 days of data
+                // Use 7-day window with default metrics (matches cache, reliable)
                 const now = new Date();
-                const endDay = new Date(now);
                 const startDay = new Date(now);
                 startDay.setDate(startDay.getDate() - 7);
-                const endDate = endDay.toISOString().split('T')[0];
+                const endDate = now.toISOString().split('T')[0];
                 const startDate = startDay.toISOString().split('T')[0];
                 console.log(`[Home] Stats fetch range: ${startDate} → ${endDate}`);
 
                 let views48h = 0, subsGained48h = 0, avgViewPct48h = 0, ctr48h = 0;
                 let fetchedAt: string | null = null;
 
-                // 1. Core metrics: views, subscribersGained, averageViewPercentage
+                // Helper: find column index by metric name in columnHeaders
+                const findCol = (headers: any[], name: string): number =>
+                    headers.findIndex((h: any) => h.name === name);
+
+                // 1. Main metrics (use defaults — no custom metrics to avoid cache column mismatch)
                 try {
                     const mainReport = await integrationsApi.getReports(
-                        'youtube', startDate, endDate, 'day',
-                        'views,subscribersGained,averageViewPercentage'
+                        'youtube', startDate, endDate, 'day'
                     );
-                    console.log('[Home] Main report rows:', mainReport?.report?.rows?.length);
-                    if (mainReport?.report?.rows) {
-                        // Only sum last 3 rows (most recent days with data) for ~48h stats
-                        const rows = mainReport.report.rows;
-                        const recentRows = rows.slice(-3);
+                    console.log('[Home] Main report:', mainReport?.report?.rows?.length, 'rows',
+                        mainReport?.report?.columnHeaders?.map((h: any) => h.name));
+                    if (mainReport?.report?.rows && mainReport?.report?.columnHeaders) {
+                        const headers = mainReport.report.columnHeaders;
+                        const iViews = findCol(headers, 'views');
+                        const iSubs = findCol(headers, 'subscribersGained');
+                        const iPct = findCol(headers, 'averageViewPercentage');
+
                         let totalPct = 0, totalDays = 0;
-                        for (const row of recentRows) {
-                            views48h += Number(row[1] || 0);
-                            subsGained48h += Number(row[2] || 0);
-                            const pct = Number(row[3] || 0);
-                            if (pct > 0) { totalPct += pct; totalDays++; }
+                        for (const row of mainReport.report.rows) {
+                            if (iViews >= 0) views48h += Number(row[iViews] || 0);
+                            if (iSubs >= 0) subsGained48h += Number(row[iSubs] || 0);
+                            if (iPct >= 0) {
+                                const pct = Number(row[iPct] || 0);
+                                if (pct > 0) { totalPct += pct; totalDays++; }
+                            }
                         }
                         avgViewPct48h = totalDays > 0 ? totalPct / totalDays : 0;
                     }
@@ -132,16 +139,15 @@ export function MorningDashboard({
                     console.warn('Home: main metrics fetch failed', e);
                 }
 
-                // 2. CTR metric (separate — can't mix with subscribersGained)
+                // 2. CTR metric (separate — incompatible with subscription metrics)
                 try {
                     const ctrReport = await integrationsApi.getReports(
                         'youtube', startDate, endDate, 'day',
                         'views,videoThumbnailImpressions,videoThumbnailImpressionsClickRate'
                     );
                     if (ctrReport?.report?.rows) {
-                        const ctrRows = ctrReport.report.rows.slice(-3);
                         let totalImpressions = 0, totalClicks = 0;
-                        for (const row of ctrRows) {
+                        for (const row of ctrReport.report.rows) {
                             const dayImpressions = Number(row[2] || 0);
                             const dayRate = Number(row[3] || 0);
                             totalImpressions += dayImpressions;
@@ -223,7 +229,7 @@ export function MorningDashboard({
             { text: 'Una retención del 50%+ es excelente. Si cae antes del minuto 1, revisá tu intro.', category: 'data' },
             { text: 'Los videos con más de 8 min pueden mostrar mid-roll ads — considerá la longitud estratégicamente.', category: 'data' },
             { text: 'Mirá de dónde viene tu tráfico: Búsqueda, Sugeridos o Browse son los 3 motores del crecimiento.', category: 'data' },
-            { text: 'Comparar tu rendimiento cada 48h te ayuda a detectar tendencias antes que el promedio mensual.', category: 'data' },
+            { text: 'Comparar tu rendimiento semanal te ayuda a detectar tendencias antes que el promedio mensual.', category: 'data' },
         ];
 
         const colors: Record<string, { accent: string; border: string }> = {
@@ -292,7 +298,7 @@ export function MorningDashboard({
             if (stats.subsGained48h >= 10) {
                 result.push({
                     icon: <TrendingUp className="w-4 h-4" />,
-                    text: `📈 +${formatCompact(stats.subsGained48h)} suscriptores en 48h. Algo está resonando — revisá qué video trajo más subs.`,
+                    text: `📈 +${formatCompact(stats.subsGained48h)} suscriptores en 7 días. Algo está resonando — revisá qué video trajo más subs.`,
                     accentColor: 'text-emerald-400',
                     borderColor: 'border-l-emerald-400',
                 });
@@ -302,7 +308,7 @@ export function MorningDashboard({
             if (result.length === 0 && stats.views48h > 0) {
                 result.push({
                     icon: <Eye className="w-4 h-4" />,
-                    text: `${formatCompact(stats.views48h)} vistas en 48h. Buscá outliers en tu nicho para detectar qué tipo de contenido está explotando.`,
+                    text: `${formatCompact(stats.views48h)} vistas en 7 días. Buscá outliers en tu nicho para detectar qué tipo de contenido está explotando.`,
                     accentColor: 'text-blue-400',
                     borderColor: 'border-l-blue-400',
                 });
@@ -395,7 +401,7 @@ export function MorningDashboard({
                 {/* Stat Cards */}
                 <TooltipProvider delayDuration={200}>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {/* Views 48h */}
+                        {/* Views 7d */}
                         <motion.div
                             whileHover={{ y: -2 }}
                             className="relative rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-4 group"
@@ -404,19 +410,19 @@ export function MorningDashboard({
                                 <div className="p-1.5 rounded-lg bg-blue-500/10">
                                     <Eye className="w-3.5 h-3.5 text-blue-400" />
                                 </div>
-                                <Badge variant="outline" className="text-[9px] font-mono text-muted-foreground border-border/50">48h</Badge>
+                                <Badge variant="outline" className="text-[9px] font-mono text-muted-foreground border-border/50">7d</Badge>
                             </div>
                             <p className="text-2xl font-black tabular-nums tracking-tight">
                                 {statsLoading ? '—' : formatCompact(stats.views48h)}
                             </p>
                             <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
                                 Vistas
-                                <Tooltip><TooltipTrigger asChild><Info className="w-3 h-3 text-muted-foreground/40 cursor-help" /></TooltipTrigger><TooltipContent side="top" className="max-w-[200px] text-xs z-[100]">Cuántas veces se vieron tus videos en las últimas 48h. Indica el alcance de tu contenido.</TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Info className="w-3 h-3 text-muted-foreground/40 cursor-help" /></TooltipTrigger><TooltipContent side="top" className="max-w-[200px] text-xs z-[100]">Vistas totales en los últimos 7 días. Indica el alcance de tu contenido.</TooltipContent></Tooltip>
                             </p>
                             <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-blue-500/5 rounded-full blur-2xl group-hover:bg-blue-500/10 transition-colors" />
                         </motion.div>
 
-                        {/* CTR 48h */}
+                        {/* CTR 7d */}
                         <motion.div
                             whileHover={{ y: -2 }}
                             className="relative rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-4 group"
@@ -425,7 +431,7 @@ export function MorningDashboard({
                                 <div className="p-1.5 rounded-lg bg-amber-500/10">
                                     <Target className="w-3.5 h-3.5 text-amber-400" />
                                 </div>
-                                <Badge variant="outline" className="text-[9px] font-mono text-muted-foreground border-border/50">48h</Badge>
+                                <Badge variant="outline" className="text-[9px] font-mono text-muted-foreground border-border/50">7d</Badge>
                             </div>
                             <p className="text-2xl font-black tabular-nums tracking-tight">
                                 {statsLoading ? '—' : (stats.ctr48h > 0 ? `${stats.ctr48h.toFixed(1)}%` : '—')}
@@ -437,7 +443,7 @@ export function MorningDashboard({
                             <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-amber-500/5 rounded-full blur-2xl group-hover:bg-amber-500/10 transition-colors" />
                         </motion.div>
 
-                        {/* Avg View % 48h */}
+                        {/* Avg View % 7d */}
                         <motion.div
                             whileHover={{ y: -2 }}
                             className="relative rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-4 group"
@@ -446,7 +452,7 @@ export function MorningDashboard({
                                 <div className="p-1.5 rounded-lg bg-violet-500/10">
                                     <Clock className="w-3.5 h-3.5 text-violet-400" />
                                 </div>
-                                <Badge variant="outline" className="text-[9px] font-mono text-muted-foreground border-border/50">48h</Badge>
+                                <Badge variant="outline" className="text-[9px] font-mono text-muted-foreground border-border/50">7d</Badge>
                             </div>
                             <p className="text-2xl font-black tabular-nums tracking-tight">
                                 {statsLoading ? '—' : (stats.avgViewPct48h > 0 ? `${stats.avgViewPct48h.toFixed(0)}%` : '—')}
@@ -458,7 +464,7 @@ export function MorningDashboard({
                             <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-violet-500/5 rounded-full blur-2xl group-hover:bg-violet-500/10 transition-colors pointer-events-none" />
                         </motion.div>
 
-                        {/* Subs Gained 48h */}
+                        {/* Subs Gained 7d */}
                         <motion.div
                             whileHover={{ y: -2 }}
                             className="relative rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-4 group"
@@ -467,14 +473,14 @@ export function MorningDashboard({
                                 <div className="p-1.5 rounded-lg bg-emerald-500/10">
                                     <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
                                 </div>
-                                <Badge variant="outline" className="text-[9px] font-mono text-muted-foreground border-border/50">48h</Badge>
+                                <Badge variant="outline" className="text-[9px] font-mono text-muted-foreground border-border/50">7d</Badge>
                             </div>
                             <p className="text-2xl font-black tabular-nums tracking-tight">
                                 {statsLoading ? '—' : (stats.subsGained48h > 0 ? `+${formatCompact(stats.subsGained48h)}` : '0')}
                             </p>
                             <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
                                 Nuevos subs
-                                <Tooltip><TooltipTrigger asChild><Info className="w-3 h-3 text-muted-foreground/40 cursor-help" /></TooltipTrigger><TooltipContent side="top" className="max-w-[200px] text-xs z-[100]">Suscriptores ganados en 48h. Refleja si tu contenido convierte espectadores casuales en seguidores fieles.</TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><Info className="w-3 h-3 text-muted-foreground/40 cursor-help" /></TooltipTrigger><TooltipContent side="top" className="max-w-[200px] text-xs z-[100]">Suscriptores ganados en los últimos 7 días. Refleja si tu contenido convierte espectadores casuales en seguidores fieles.</TooltipContent></Tooltip>
                             </p>
                             <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-colors" />
                         </motion.div>

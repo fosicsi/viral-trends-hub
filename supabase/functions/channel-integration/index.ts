@@ -213,6 +213,33 @@ Deno.serve(async (req) => {
             return new Response(JSON.stringify({ success: true }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
         }
 
+        // 2.5 SAVE API KEY (BYOK)
+        if (action === 'save_api_key') {
+            const { platform, apiKey } = body;
+            if (!platform || !apiKey) throw new Error("Missing platform or apiKey");
+
+            const encryptionKey = Deno.env.get("OAUTH_ENCRYPTION_KEY") || "default-insecure-key";
+            const encryptedKey = await encrypt(apiKey, encryptionKey);
+
+            const supabaseAdmin = createClient(
+                Deno.env.get('SUPABASE_URL') ?? '',
+                Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+            );
+
+            const { error: upsertError } = await supabaseAdmin
+                .from('user_api_keys')
+                .upsert({
+                    user_id: user.id,
+                    platform,
+                    encrypted_key: encryptedKey,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'user_id, platform' });
+
+            if (upsertError) throw upsertError;
+
+            return new Response(JSON.stringify({ success: true }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+        }
+
         // 3. STATUS
         if (action === 'status') {
             const { data, error } = await supabaseClient

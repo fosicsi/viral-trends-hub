@@ -127,7 +127,6 @@ export async function getRecentVideos(count: number = 10): Promise<YouTubeVideo[
     }
 }
 
-/**
 export async function getVideoAnalytics(videoId: string, publishedDate: string): Promise<Partial<VideoMetrics>> {
     try {
         // Fetch analytics for the video's date range (from published to today)
@@ -141,42 +140,42 @@ export async function getVideoAnalytics(videoId: string, publishedDate: string):
 
         console.log(`[getVideoAnalytics] Fetching for video: ${videoId}`);
 
-const [res1, res2] = await Promise.all([
-    integrationsApi.getReports('youtube', startDate, endDate, 'day', group1, 'main', `video==${videoId}`),
-    integrationsApi.getReports('youtube', startDate, endDate, 'day', group2, 'main', `video==${videoId}`)
-]);
+        const [res1, res2] = await Promise.all([
+            integrationsApi.getReports('youtube', startDate, endDate, 'day', group1, 'main', `video==${videoId}`),
+            integrationsApi.getReports('youtube', startDate, endDate, 'day', group2, 'main', `video==${videoId}`)
+        ]);
 
-const stats: Partial<VideoMetrics> = {};
+        const stats: Partial<VideoMetrics> = {};
 
-if (res1?.report?.rows?.length > 0) {
-    // Aggregate totals/averages for the period
-    let totalRetention = 0;
-    let totalAVD = 0;
-    let rows = res1.report.rows;
+        if (res1?.report?.rows?.length > 0) {
+            // Aggregate totals/averages for the period
+            let totalRetention = 0;
+            let totalAVD = 0;
+            let rows = res1.report.rows;
 
-    rows.forEach((row: any[]) => {
-        totalRetention += row[3]; // averageViewPercentage
-        totalAVD += row[4]; // averageViewDuration (indices: day=0, views=1, estMin=2, avgPct=3, avgDur=4)
-    });
+            rows.forEach((row: any[]) => {
+                totalRetention += row[3]; // averageViewPercentage
+                totalAVD += row[4]; // averageViewDuration (indices: day=0, views=1, estMin=2, avgPct=3, avgDur=4)
+            });
 
-    stats.retention = totalRetention / rows.length;
-    stats.avgViewDuration = totalAVD / rows.length;
-}
+            stats.retention = totalRetention / rows.length;
+            stats.avgViewDuration = totalAVD / rows.length;
+        }
 
-if (res2?.report?.rows?.length > 0) {
-    let totalCTR = 0;
-    let rows = res2.report.rows;
-    rows.forEach((row: any[]) => {
-        totalCTR += row[2]; // impressionClickThroughRate (indices: day=0, impressions=1, ctr=2)
-    });
-    stats.ctr = totalCTR / rows.length;
-}
+        if (res2?.report?.rows?.length > 0) {
+            let totalCTR = 0;
+            let rows = res2.report.rows;
+            rows.forEach((row: any[]) => {
+                totalCTR += row[2]; // impressionClickThroughRate (indices: day=0, impressions=1, ctr=2)
+            });
+            stats.ctr = totalCTR / rows.length;
+        }
 
-return stats;
+        return stats;
     } catch (error) {
-    console.error('Error fetching video analytics:', error);
-    return {};
-}
+        console.error('Error fetching video analytics:', error);
+        return {};
+    }
 }
 
 /**

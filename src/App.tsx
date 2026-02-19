@@ -11,6 +11,8 @@ import AuthPage from "./pages/Auth";
 import AnalyticsLayout from "./features/analytics/layout/AnalyticsLayout";
 import AnalyticsDashboard from "./features/analytics/pages/AnalyticsDashboard";
 import AnalyticsSettings from "./features/analytics/pages/AnalyticsSettings";
+import CreatorStudio from "./features/studio/pages/CreatorStudio";
+import Profile from "./pages/Profile";
 
 import Onboarding from "./pages/Onboarding";
 import OnboardingGuard from "./components/auth/OnboardingGuard";
@@ -52,6 +54,18 @@ const App = () => (
             <Route index element={<AnalyticsDashboard />} />
             <Route path="settings" element={<AnalyticsSettings />} />
           </Route>
+
+          <Route path="/studio" element={
+            <OnboardingGuard>
+              <CreatorStudio />
+            </OnboardingGuard>
+          } />
+
+          <Route path="/profile" element={
+            <OnboardingGuard>
+              <Profile />
+            </OnboardingGuard>
+          } />
 
           <Route path="*" element={<NotFound />} />
         </Routes>

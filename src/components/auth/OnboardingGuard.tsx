@@ -32,8 +32,26 @@ export default function OnboardingGuard({ children }: { children: React.ReactNod
                 console.log("[OnboardingGuard] hasYoutube:", hasYoutube);
 
                 if (hasYoutube) {
-                    console.log("[OnboardingGuard] Connected, status -> connected");
-                    setStatus('connected');
+                    // Also check for creator profile
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        const { data: profile } = await supabase
+                            .from('creator_profiles' as any)
+                            .select('user_id')
+                            .eq('user_id', user.id)
+                            .maybeSingle();
+
+                        if (profile) {
+                            console.log("[OnboardingGuard] Connected + Profile, status -> connected");
+                            setStatus('connected');
+                        } else {
+                            console.log("[OnboardingGuard] Connected but NO Profile, status -> onboarding");
+                            setStatus('onboarding');
+                            if (location.pathname !== '/onboarding') {
+                                navigate('/onboarding');
+                            }
+                        }
+                    }
                 } else {
                     console.log("[OnboardingGuard] Not connected, status -> onboarding");
                     setStatus('onboarding');

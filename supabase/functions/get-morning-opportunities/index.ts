@@ -28,7 +28,8 @@ Deno.serve(async (req) => {
 
         // 3. Keyword Validation
         const topic = body.keywords;
-        console.log("Input Keywords:", topic);
+        const format = body.format || 'mix'; // 'short', 'long', 'mix'
+        console.log("Input Keywords:", topic, "Format:", format);
 
         if (!topic || topic.length < 3) {
             return new Response(JSON.stringify({
@@ -48,8 +49,15 @@ Deno.serve(async (req) => {
             throw new Error("Server Env Var missing");
         }
 
+        let searchQuery = topic;
+        if (format === 'short') {
+            searchQuery += " #shorts";
+        } else if (format === 'long') {
+            searchQuery += " -shorts";
+        }
+
         const maxResults = 5;
-        const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(topic)}&maxResults=${maxResults}&order=viewCount&type=video&key=${apiKey}`;
+        const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchQuery)}&maxResults=${maxResults}&order=viewCount&type=video&key=${apiKey}`;
 
         console.log("Fetching YouTube Search...");
         const res = await fetch(searchUrl);
@@ -87,8 +95,23 @@ Deno.serve(async (req) => {
             // Let's assume top results have >50k views.
             const estimatedViews = 10000 + Math.floor(Math.random() * 90000);
 
-            // Calculate ratio
+            // Calculate ratio (Outlier Score)
             const ratio = subs > 0 ? (estimatedViews / subs) : 0;
+
+            // Determine Reason & Badge
+            let reason = "Tendencia";
+            let badgeType = "normal"; // normal, viral, outlier, gem
+
+            if (estimatedViews > 1000000) {
+                reason = "🔥 Megaviral";
+                badgeType = "viral";
+            } else if (subs < 10000 && estimatedViews > subs * 5) {
+                reason = "💎 Joya Oculta";
+                badgeType = "gem";
+            } else if (ratio > 3.0) {
+                reason = "🚀 Outlier (3x)";
+                badgeType = "outlier";
+            }
 
             return {
                 id: item.id.videoId,
@@ -99,7 +122,8 @@ Deno.serve(async (req) => {
                 views: estimatedViews,
                 publishedAt: item.snippet.publishedAt,
                 ratio: ratio,
-                reason: subs < 10000 ? "Canal Pequeño" : "Viral",
+                reason: reason,
+                badgeType: badgeType,
                 duration: "Short"
             };
         });

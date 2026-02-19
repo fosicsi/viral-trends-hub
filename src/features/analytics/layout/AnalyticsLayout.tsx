@@ -1,6 +1,6 @@
 import { Outlet, useNavigate } from "react-router-dom";
 import { ViralSidebar } from "@/features/viral/components/ViralSidebar";
-import { AnalyticsHeader } from "./AnalyticsHeader";
+import { DashboardHeader } from "@/components/layout/DashboardHeader";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -75,7 +75,7 @@ export default function AnalyticsLayout() {
             />
 
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                <AnalyticsHeader />
+                <DashboardHeader user={user} toggleTheme={toggleTheme} isDark={theme === 'dark'} />
                 <main className="flex-1 overflow-y-auto p-4 md:p-8">
                     <Outlet />
                 </main>

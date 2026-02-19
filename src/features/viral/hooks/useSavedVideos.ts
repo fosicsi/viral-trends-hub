@@ -11,22 +11,13 @@ export function useSavedVideos() {
   const fetchSaved = React.useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) {
+        setSaved([]);
+        setLoading(false);
+        return;
+      }
 
-      // A. Legacy Videos Table is DEPRECATED
-      // It lacks user_id and causes "ghost" videos from shared usage.
-      // We will only load from content_creation_plan now.
-      /*
-      const { data: videosData, error: videosError } = await supabase
-        .from('videos')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (videosError) console.error(videosError);
-      */
-
-      // B. Fetch Content Plan Ideas (ensure we select all fields)
-      // We use 'as any' to bypass the new column type issues until types are regenerated
+      // 1. Fetch Plan Items (strictly for this user)
       const { data: planData, error: planError } = await supabase
         .from('content_creation_plan' as any)
         .select('*')
@@ -34,19 +25,13 @@ export function useSavedVideos() {
         .eq('status', 'idea')
         .order('created_at', { ascending: false });
 
-      if (planError) console.error("Plan Fetch Error:", planError);
+      if (planError) {
+        console.error("Plan Fetch Error:", planError);
+        return;
+      }
 
-      // C. Map Legacy Videos (Always empty now)
-      const mappedVideos: VideoItem[] = [];
-
-      /*
-      (videosData as any[] || []).map(v => ({
-         ... legacy mapping ...
-      } as any));
-      */
-
-      // D. Map Plan Items to VideoItem
-      const mappedPlan: VideoItem[] = (planData as any[] || []).map((p) => ({
+      // 2. Map Plan Items to VideoItem
+      const mappedItems: VideoItem[] = (planData as any[] || []).map((p) => ({
         id: p.source_video_id || p.id,
         title: p.source_title || p.title,
         url: `https://youtube.com/watch?v=${p.source_video_id}`,
@@ -59,24 +44,13 @@ export function useSavedVideos() {
         growthRatio: (Number(p.source_views) > 0 && Number(p.source_channel_subs) > 0)
           ? Number(p.source_views) / Number(p.source_channel_subs)
           : 0,
-        sourceTable: 'content_creation_plan', // Mark source
-        dbId: p.id, // Keep the UUID for deletion
+        sourceTable: 'content_creation_plan',
+        dbId: p.id,
         scriptContent: p.script_content,
         scriptStatus: p.script_content ? 'done' : 'none'
       } as any));
 
-      // Merge and Deduplicate (prefer Plan items if duplicates exist by ID)
-      const combined = [...mappedPlan, ...mappedVideos];
-      // Simple dedupe by YouTube ID, preferring the first one (Plan)
-      const seen = new Set();
-      const unique = combined.filter(v => {
-        if (!v.id) return false;
-        if (seen.has(v.id)) return false;
-        seen.add(v.id);
-        return true;
-      });
-
-      setSaved(unique);
+      setSaved(mappedItems);
     } catch (e) {
       console.error("Error loading videos:", e);
     } finally {
@@ -192,7 +166,7 @@ export function useSavedVideos() {
         .from('content_creation_plan' as any)
         .delete()
         .eq('user_id', session.user.id)
-        .eq('status', 'idea'); // Only delete unprocessed ideas
+        .eq('status', 'idea');
 
       if (error) {
         console.error("Error clearing plan ideas:", error);

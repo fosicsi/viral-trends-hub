@@ -12,7 +12,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-export function AnalyticsHeader() {
+interface AnalyticsHeaderProps {
+    user: any;
+}
+
+export function AnalyticsHeader({ user }: AnalyticsHeaderProps) {
     return (
         <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-6">
             <div className="flex flex-1 items-center gap-4">
@@ -32,24 +36,23 @@ export function AnalyticsHeader() {
                 </form>
                 <Button variant="ghost" size="icon" className="relative">
                     <Bell className="h-5 w-5" />
-                    <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-600 border-2 border-background" />
                     <span className="sr-only">Notificaciones</span>
                 </Button>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                             <Avatar className="h-8 w-8">
-                                <AvatarImage src="/placeholder-avatar.jpg" alt="@user" />
-                                <AvatarFallback>U</AvatarFallback>
+                                <AvatarImage src={user?.user_metadata?.avatar_url || "/placeholder-avatar.jpg"} alt={user?.email} />
+                                <AvatarFallback>{user?.email?.charAt(0).toUpperCase() || "U"}</AvatarFallback>
                             </Avatar>
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="w-56" align="end" forceMount>
                         <DropdownMenuLabel className="font-normal">
                             <div className="flex flex-col space-y-1">
-                                <p className="text-sm font-medium leading-none">Usuario</p>
+                                <p className="text-sm font-medium leading-none">{user?.user_metadata?.full_name || "Usuario"}</p>
                                 <p className="text-xs leading-none text-muted-foreground">
-                                    usuario@ejemplo.com
+                                    {user?.email || "usuario@ejemplo.com"}
                                 </p>
                             </div>
                         </DropdownMenuLabel>

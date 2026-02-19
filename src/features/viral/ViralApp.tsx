@@ -1,7 +1,6 @@
 import * as React from "react";
 import { ViralSidebar, type ViralView } from "./components/ViralSidebar";
 import { toast } from "sonner";
-import { ViralTopbar } from "./components/ViralTopbar";
 import { ViralSearchHeader } from "./components/ViralSearchHeader";
 import { ViralVideoCard } from "./components/ViralVideoCard";
 import { NicheInsightsBar } from "./components/NicheInsightsBar";
@@ -13,6 +12,7 @@ import { ViralGlossaryView } from "./components/ViralGlossaryView";
 import type { ViralFilters, VideoItem } from "./types";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { DashboardHeader } from "@/components/layout/DashboardHeader";
 import { MorningDashboard } from "./MorningDashboard"; // Import new Dashboard
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -189,24 +189,19 @@ export default function ViralApp() {
     setAiCriteria(null);
   };
 
-  const handleGenerateScript = async () => {
-    if (!selected) return;
+  const handleGenerateScript = async (video: VideoItem) => {
+    if (!video) return;
 
     setScriptLoading(true);
     try {
-      const res = await generateViralScript(selected.title, selected.channelTitle);
-      if ("error" in res) {
-        if (res.error?.includes("401") || res.error?.includes("account")) {
-          alert("⚠️ Conecta tu cuenta de Google en Integraciones para usar esta función.");
-          navigate("/integrations");
-        } else {
-          alert("Error: " + res.error);
-        }
-      } else {
-        setViralPackage(res);
-      }
+      // Use the robust generateScript from useSavedVideos hook
+      await generateScript(video);
+
+      // Update local state if needed (mostly handled by hook)
+      toast.success("Estrategia generada con éxito");
     } catch (e) {
-      alert("Error al generar el paquete viral.");
+      console.error("Error generating script:", e);
+      toast.error("Error al generar el paquete viral.");
     } finally {
       setScriptLoading(false);
     }
@@ -439,7 +434,13 @@ export default function ViralApp() {
       )}
 
       <div className="flex-1 min-w-0 flex flex-col relative overflow-hidden">
-        {view !== "home" && <ViralTopbar view={view} />}
+        {view !== "home" && (
+          <DashboardHeader
+            user={session?.user}
+            toggleTheme={toggleTheme}
+            isDark={isDark}
+          />
+        )}
 
         <main className="flex-1 overflow-y-auto relative scroll-smooth">
 

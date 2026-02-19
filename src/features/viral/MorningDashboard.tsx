@@ -24,6 +24,7 @@ interface VitalStats {
     avgViewPct48h: number;    // Average view percentage (e.g. 45.2)
     subsGained48h: number;
     fetchedAt: string | null;
+    videoCount: number;
 }
 
 interface CreatorTip {
@@ -79,7 +80,7 @@ export function MorningDashboard({
     onNavigate: (view: string) => void;
 }) {
     // -- State --
-    const [stats, setStats] = useState<VitalStats>({ views48h: 0, ctr48h: 0, avgViewPct48h: 0, subsGained48h: 0, fetchedAt: null });
+    const [stats, setStats] = useState<VitalStats>({ views48h: 0, ctr48h: 0, avgViewPct48h: 0, subsGained48h: 0, fetchedAt: null, videoCount: 0 });
     const [statsLoading, setStatsLoading] = useState(true);
     const [detectedNiche, setDetectedNiche] = useState<string>('');
     const [opportunities, setOpportunities] = useState<MorningItem[]>([]);
@@ -178,7 +179,17 @@ export function MorningDashboard({
                     console.warn('Home: CTR fetch failed', e);
                 }
 
-                const newStats = { views48h, ctr48h, avgViewPct48h, subsGained48h, fetchedAt };
+                const newStats = { views48h, ctr48h, avgViewPct48h, subsGained48h, fetchedAt, videoCount: 0 };
+
+                // 3. Get channel details (video count)
+                try {
+                    const { data: integrations } = await integrationsApi.getStatus();
+                    const youtube = integrations?.find(i => i.platform === 'youtube' || i.platform === 'google');
+                    if (youtube?.metadata?.stats) {
+                        newStats.videoCount = Number(youtube.metadata.stats.videoCount || 0);
+                    }
+                } catch (e) { console.warn('Home: videoCount fetch failed', e); }
+
                 setStats(newStats);
                 localStorage.setItem('vth_stats_cache', JSON.stringify({ timestamp: Date.now(), data: newStats }));
 
@@ -275,6 +286,17 @@ export function MorningDashboard({
             { text: 'Comparar tu rendimiento semanal te ayuda a detectar tendencias antes que el promedio mensual.', category: 'data' },
         ];
 
+        const newbiePool: { text: string; category: 'strategy' | 'technical' }[] = [
+            { text: '⚠️ Regla de Oro: Evitá el "Sub4Sub". YouTube detecta el spam y puede banear tu canal o matar tu alcance orgánico.', category: 'strategy' },
+            { text: '🎯 Los primeros 10 videos son para aprender. YouTube tarda ese tiempo en entender exactamente a quién recomendar tu contenido.', category: 'strategy' },
+            { text: '🔒 Seguridad Vital: Activa la Autenticación de 2 Factores en tu cuenta de Google. Los canales nuevos son blanco frecuente de hackeos.', category: 'technical' },
+            { text: '📈 Calidad > Cantidad. Es mejor subir 1 gran video por semana que 5 mediocres que nadie termina de ver.', category: 'strategy' },
+            { text: '🚫 Cuidado con el Clickbait engañoso. Si el thumbnail promete algo que el video no da, tu retención morirá y YouTube dejará de recomendarte.', category: 'strategy' },
+            { text: '📣 Evitá el spam de links en comentarios de otros canales. Es la forma más rápida de que YouTube marque tu cuenta como bot.', category: 'technical' },
+            { text: '✨ Shorts para Alcance: Si estás en 0, los Shorts son la vía más rápida para que YouTube te muestre a gente nueva.', category: 'strategy' },
+            { text: '📝 SEO Inicial: Poné tus palabras clave en las primeras 2 líneas de la descripción. Ayuda al buscador a indexarte rápido.', category: 'technical' },
+        ];
+
         const colors: Record<string, { accent: string; border: string }> = {
             strategy: { accent: 'text-amber-400', border: 'border-l-amber-400' },
             creative: { accent: 'text-violet-400', border: 'border-l-violet-400' },
@@ -361,17 +383,21 @@ export function MorningDashboard({
         // Cap contextual tips at 2, leave room for at least 1 daily generic tip
         while (result.length > 2) result.pop();
 
-        // Fill remaining slots with daily-rotated generic tips
+        // Fill remaining slots with daily-rotated tips
         const needed = 3 - result.length;
+        const isNewbie = stats.videoCount === 0;
+
         for (let i = 0; i < needed; i++) {
-            const idx = (day + i * 7) % genericPool.length;
-            const tip = genericPool[idx];
-            const color = colors[tip.category];
+            const pool = (isNewbie && i === 0) ? newbiePool : genericPool;
+            const idx = (day + i * 7) % pool.length;
+            const tip = pool[idx];
+            const category = tip.category as keyof typeof colors;
+            const color = colors[category];
             result.push({
-                icon: icons[tip.category],
+                icon: icons[category] || <Lightbulb className="w-4 h-4" />,
                 text: tip.text,
-                accentColor: color.accent,
-                borderColor: color.border,
+                accentColor: color?.accent || 'text-primary',
+                borderColor: color?.border || 'border-l-primary',
             });
         }
 

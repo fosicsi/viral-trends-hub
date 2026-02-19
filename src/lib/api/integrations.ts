@@ -55,9 +55,9 @@ export const integrationsApi = {
     }
   },
 
-  async initiateConnection(platform: 'youtube' | 'gemini') {
+  async initiateConnection(platform: 'youtube' | 'gemini' | 'google', prompt?: string) {
     const { data } = await this.invokeFunction('channel-integration', {
-      action: 'init', platform, redirectUrl: window.location.origin + '/auth/callback'
+      action: 'init', platform, prompt, redirectUrl: window.location.origin + '/auth/callback'
     });
     return data;
   },

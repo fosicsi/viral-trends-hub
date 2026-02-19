@@ -460,7 +460,13 @@ export default function AnalyticsDashboard() {
                             </ResponsiveContainer>
                         </ChartContainer>
 
-                        <div className="col-span-3">
+                        <div className="col-span-3 space-y-6">
+                            <ChannelHealthIndicator metrics={healthMetrics} />
+                            <SessionAnalysisCard
+                                avgVideosPerSession={1.2} // Proxy: Not directly available in basic API
+                                viewsPerUniqueViewer={currentViews > 0 && currentSubs > 0 ? Number((currentViews / (currentSubs * 5)).toFixed(2)) : 1.5} // Rough proxy using subs as base for uniques (testing)
+                                bingePotentialScore={algorithmicScore} // Using algo score as proxy for binge potential
+                            />
                             <LastVideoPerformance analysis={lastVideoAnalysis} isLoading={isAnalyzingVideo} />
                         </div>
                     </div>

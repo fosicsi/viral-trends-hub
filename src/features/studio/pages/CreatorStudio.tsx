@@ -7,12 +7,16 @@ import { useState } from "react";
 import { ScriptGenWizard } from "../components/ScriptGenWizard";
 import { SectionBasedEditor } from "../components/SectionBasedEditor";
 import { ThumbnailPreview } from "../components/ThumbnailPreview";
+import { useSavedProjects } from "../hooks/useSavedProjects";
+import { useToast } from "@/components/ui/use-toast";
 
 type ViewState = 'menu' | 'wizard' | 'editor' | 'thumbnail';
 
 export default function CreatorStudio() {
     const [view, setView] = useState<ViewState>('menu');
     const [currentScript, setCurrentScript] = useState<any>(null);
+    const { saveProject, refresh: refreshProjects } = useSavedProjects();
+    const { toast } = useToast();
 
     const handleScriptGenerated = (script: any) => {
         setCurrentScript(script);
@@ -23,6 +27,28 @@ export default function CreatorStudio() {
         setView('menu');
         setCurrentScript(null);
     }
+
+    const handleSaveScript = async (scriptData: any) => {
+        try {
+            await saveProject({
+                title: scriptData.title || 'Guion sin título',
+                script_content: scriptData
+            });
+            toast({
+                title: "✅ Guardado en Proyectos",
+                description: "Podés encontrarlo en la barra lateral bajo 'Saved Projects'.",
+            });
+            refreshProjects();
+        } catch (err: any) {
+            // Error already handled by useSavedProjects
+        }
+    };
+
+    const handleLoadProject = (project: any) => {
+        const script = project.script_content || {};
+        setCurrentScript(script);
+        setView('editor');
+    };
 
     const renderContent = () => {
         switch (view) {
@@ -43,7 +69,7 @@ export default function CreatorStudio() {
                         </Button>
                         <SectionBasedEditor
                             initialScript={currentScript}
-                            onSave={(scriptData) => console.log("Saving...", scriptData)}
+                            onSave={handleSaveScript}
                         />
                     </div>
                 );
@@ -121,7 +147,11 @@ export default function CreatorStudio() {
     };
 
     return (
-        <CreatorStudioLayout currentView={view} onViewChange={setView}>
+        <CreatorStudioLayout
+            currentView={view}
+            onViewChange={setView}
+            onLoadProject={handleLoadProject}
+        >
             {renderContent()}
         </CreatorStudioLayout>
     );

@@ -65,55 +65,28 @@ Deno.serve(async (req) => {
           '{"topic":"...","criteria":"..."}',
         ].join("\n");
 
-    let resp;
-    if (userApiKey) {
-      console.log(`[ai-viral-topics] Using user-provided Gemini API key for user ${user?.id}`);
-      resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${userApiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `${system}\n\n${userPrompt}` }] }],
-          generationConfig: { temperature: 0.8, maxOutputTokens: 1024 }
-        }),
-      });
-    } else {
-      const apiKey = Deno.env.get("LOVABLE_API_KEY");
-      if (!apiKey) return json({ success: false, error: "Missing LOVABLE_API_KEY" }, 500);
+    const apiKey = userApiKey || Deno.env.get("GEMINI_API_KEY");
+    if (!apiKey) return json({ success: false, error: "No API Key configured. Set GEMINI_API_KEY or add your own." }, 500);
 
-      console.log("[ai-viral-topics] Using system Lovable AI Gateway");
-      resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          temperature: 0.8,
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: userPrompt },
-          ],
-        }),
-      });
-    }
+    console.log(`[ai-viral-topics] Using Gemini API (BYOK: ${!!userApiKey})`);
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: `${system}\n\n${userPrompt}` }] }],
+        generationConfig: { temperature: 0.8, maxOutputTokens: 1024 }
+      }),
+    });
 
     if (!resp.ok) {
       const t = await resp.text().catch(() => "");
       if (resp.status === 429) return json({ success: false, error: "Límite de IA alcanzado. Probá de nuevo." }, 429);
-      if (resp.status === 402) return json({ success: false, error: "Créditos de IA agotados. Agregá tu propia API Key para continuar." }, 402);
-      console.error("ai-viral-topics gateway error:", resp.status, t);
+      console.error("ai-viral-topics Gemini error:", resp.status, t);
       return json({ success: false, error: "Error de IA" }, 500);
     }
 
     const payload: any = await resp.json();
-    let content = "";
-
-    if (userApiKey) {
-      content = payload.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    } else {
-      content = String(payload?.choices?.[0]?.message?.content ?? "").trim();
-    }
+    const content = payload.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     const parsed = safeParseJson<{ topic?: string; criteria?: string }>(content);
     const topic = String(parsed?.topic ?? "").trim();

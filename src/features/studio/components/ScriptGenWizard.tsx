@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Wand2, Loader2, FileText, CheckCircle2, Sparkles, Target, Flame, Gem, Rocket } from "lucide-react";
+import { Wand2, Loader2, FileText, CheckCircle2, Sparkles, Target, Flame, Gem, Rocket, RefreshCw, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { useMorningOpportunities } from "../hooks/useMorningOpportunities";
@@ -18,22 +18,15 @@ interface ScriptGenWizardProps {
 export function ScriptGenWizard({ onScriptGenerated }: ScriptGenWizardProps) {
     const [step, setStep] = useState(1);
     const [topic, setTopic] = useState("");
-    const [format, setFormat] = useState("long"); // 'long' or 'short'
+    const [format, setFormat] = useState("long");
     const [loading, setLoading] = useState(false);
     const [showNicheForm, setShowNicheForm] = useState(false);
     const { toast } = useToast();
-    const { opportunities, loading: loadingOpportunities, refresh } = useMorningOpportunities();
-
-    // Check if user has a niche defined (mock check for now, or based on empty results)
-    useEffect(() => {
-        // In a real scenario, we'd check user metadata here.
-        // For now, if opportunities are loaded but empty, maybe prompt for niche?
-        // Or just provide a button "Refinar Nicho".
-    }, [opportunities]);
+    const { opportunities, loading: loadingOpportunities, error: oppError, syncStatus, refresh } = useMorningOpportunities();
 
     const handleProfileComplete = () => {
         setShowNicheForm(false);
-        refresh(); // Re-fetch opportunities with new keywords
+        refresh();
     };
 
     const generateScript = async () => {
@@ -41,62 +34,57 @@ export function ScriptGenWizard({ onScriptGenerated }: ScriptGenWizardProps) {
         setLoading(true);
 
         try {
-            // Get user session
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) throw new Error("No session");
 
-            console.log("Calling ai-creator-studio with:", { topic, format });
+            // Build a context-enriched prompt
+            // Include trending opportunities as context so the AI generates scripts
+            // that are INFORMED by what's actually working on YouTube right now
+            const trendingContext = opportunities.length > 0
+                ? `\n\nCONTEXTO TRENDING: Estos videos están funcionando bien ahora mismo en YouTube:
+${opportunities.slice(0, 4).map((o: any) => `- "${o.title}" (${formatViews(o.views)} views, canal: ${o.channelTitle || 'N/A'})`).join('\n')}
+Usa este contexto para hacer el guion MÁS RELEVANTE y ACTUAL. No copies estos títulos, pero inspírate en lo que está funcionando.`
+                : '';
 
-            // Call Edge Function
+            console.log("Calling ai-creator-studio with context:", { topic, format, hasContext: !!trendingContext });
+
             const { data, error } = await supabase.functions.invoke('ai-creator-studio', {
                 body: {
-                    userId: session.user.id,
-                    action: 'generate_script',
                     topic,
-                    format
+                    format,
+                    trendingContext // Pass trending context to the AI
                 }
             });
 
             if (error) {
-                console.warn("Edge Function failed, falling back to simulation:", error);
-                throw new Error("Edge Function Error");
+                console.error("Edge Function error:", JSON.stringify(error, null, 2));
+                throw error;
             }
             if (!data) throw new Error("No data returned");
 
+            const providerUsed = data.provider || 'IA';
             toast({
                 title: "¡Guion Generado!",
-                description: "La IA ha creado una estructura viral para tu video.",
+                description: `Creado con ${providerUsed}. Estructura optimizada para retención viral.`,
             });
 
             onScriptGenerated(data.script);
 
         } catch (error: any) {
             console.error("Script Generation Error:", error);
+            let errorMsg = error.message || "Error desconocido al conectar con la IA.";
+            try {
+                if (error.context && typeof error.context.json === 'function') {
+                    const parsed = await error.context.json();
+                    if (parsed.error || parsed.message) errorMsg = parsed.message || parsed.error;
+                }
+            } catch (_) { }
 
-            // FALLBACK SIMULATION
             toast({
-                title: "Modo Simulación Activado",
-                description: "Backend no detectado. Generando ejemplo local...",
-                variant: "default" // Not destructive, just informative
+                title: "Error de Generación",
+                description: errorMsg,
+                variant: "destructive"
             });
-
-            // Simulate AI delay
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            const mockScript = {
-                title: `Simulación: ${topic}`,
-                hook: "¡Detente! No vas a creer lo fácil que es esto.",
-                intro: `En este video te voy a mostrar exactamente cómo dominar ${topic} en solo 3 pasos.`,
-                body: [
-                    "Paso 1: La Preparación. Lo que nadie te cuenta es...",
-                    "Paso 2: La Ejecución. Aquí es donde ocurre la magia...",
-                    "Paso 3: El Secreto Final. Para garantizar el éxito, siempre recuerda..."
-                ],
-                cta: "Si te sirvió, suscríbete para más secretos como este."
-            };
-
-            onScriptGenerated(mockScript);
-
         } finally {
             setLoading(false);
         }
@@ -114,14 +102,20 @@ export function ScriptGenWizard({ onScriptGenerated }: ScriptGenWizardProps) {
                         <Wand2 className="w-5 h-5 text-purple-500" />
                         Generador de Guiones Virales
                     </CardTitle>
-                    <Button variant="outline" size="sm" onClick={() => setShowNicheForm(true)}>
-                        <Target className="w-4 h-4 mr-2" />
-                        Refinar Nicho
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => refresh()}>
+                            <RefreshCw className="w-4 h-4 mr-1" />
+                            Actualizar
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setShowNicheForm(true)}>
+                            <Target className="w-4 h-4 mr-2" />
+                            Refinar Nicho
+                        </Button>
+                    </div>
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
-                {/* Daily Inspiration Section */}
+                {/* Opportunities Section */}
                 <div className="space-y-3">
                     <div className="flex items-center justify-between">
                         <Label className="flex items-center gap-2">
@@ -134,10 +128,35 @@ export function ScriptGenWizard({ onScriptGenerated }: ScriptGenWizardProps) {
                         <div className="h-40 border dashed rounded-md flex items-center justify-center text-xs text-muted-foreground bg-secondary/5">
                             <div className="text-center">
                                 <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-primary" />
-                                <p>Analizando competencia y tendencias...</p>
+                                <p>{syncStatus || "Analizando competencia y tendencias..."}</p>
+                            </div>
+                        </div>
+                    ) : oppError ? (
+                        /* ERROR STATE — Show real error instead of nothing */
+                        <div className="h-40 border border-orange-500/30 rounded-md flex items-center justify-center text-sm text-muted-foreground bg-orange-500/5">
+                            <div className="text-center px-4">
+                                <AlertCircle className="w-6 h-6 mx-auto mb-2 text-orange-500" />
+                                <p className="text-orange-600 font-medium">No se pudieron cargar las oportunidades</p>
+                                <p className="text-xs mt-1">{oppError}</p>
+                                <Button variant="outline" size="sm" className="mt-3" onClick={() => refresh()}>
+                                    <RefreshCw className="w-3 h-3 mr-1" /> Reintentar
+                                </Button>
+                            </div>
+                        </div>
+                    ) : opportunities.length === 0 ? (
+                        /* EMPTY STATE */
+                        <div className="h-40 border border-dashed rounded-md flex items-center justify-center text-sm text-muted-foreground bg-secondary/5">
+                            <div className="text-center px-4">
+                                <Sparkles className="w-6 h-6 mx-auto mb-2 text-muted-foreground" />
+                                <p className="font-medium">Sin oportunidades aún</p>
+                                <p className="text-xs mt-1">Definí tu nicho para ver tendencias relevantes</p>
+                                <Button variant="outline" size="sm" className="mt-3" onClick={() => setShowNicheForm(true)}>
+                                    <Target className="w-3 h-3 mr-1" /> Configurar Nicho
+                                </Button>
                             </div>
                         </div>
                     ) : (
+                        /* REAL OPPORTUNITIES */
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
                             {opportunities.slice(0, 4).map((opp: any) => (
                                 <div
@@ -148,7 +167,7 @@ export function ScriptGenWizard({ onScriptGenerated }: ScriptGenWizardProps) {
                                     <div className="w-24 h-16 bg-muted rounded-md shrink-0 overflow-hidden relative shadow-sm">
                                         <img src={opp.thumbnail} alt="" className="w-full h-full object-cover" />
                                         <div className="absolute bottom-0 right-0 bg-black/70 text-white text-[10px] px-1 rounded-tl">
-                                            {new Intl.NumberFormat('es-MX', { notation: "compact" }).format(opp.views)}
+                                            {formatViews(opp.views)}
                                         </div>
                                     </div>
                                     <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
@@ -174,6 +193,11 @@ export function ScriptGenWizard({ onScriptGenerated }: ScriptGenWizardProps) {
                                             {opp.badgeType === 'normal' && (
                                                 <span className="text-[10px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">
                                                     Tendencia
+                                                </span>
+                                            )}
+                                            {opp.channelTitle && (
+                                                <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
+                                                    {opp.channelTitle}
                                                 </span>
                                             )}
                                         </div>
@@ -249,4 +273,8 @@ export function ScriptGenWizard({ onScriptGenerated }: ScriptGenWizardProps) {
             </CardFooter>
         </Card>
     );
+}
+
+function formatViews(views: number): string {
+    return new Intl.NumberFormat('es-MX', { notation: "compact" }).format(views);
 }

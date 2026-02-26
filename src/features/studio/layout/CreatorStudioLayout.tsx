@@ -8,7 +8,9 @@ import {
     Settings,
     Image as ImageIcon,
     Home,
-    Loader2
+    Loader2,
+    Trash2,
+    Play
 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -21,12 +23,13 @@ interface CreatorStudioLayoutProps {
     children: React.ReactNode;
     currentView: string;
     onViewChange: (view: any) => void;
+    onLoadProject?: (project: any) => void;
 }
 
-export function CreatorStudioLayout({ children, currentView, onViewChange }: CreatorStudioLayoutProps) {
+export function CreatorStudioLayout({ children, currentView, onViewChange, onLoadProject }: CreatorStudioLayoutProps) {
     const [user, setUser] = useState<any>(null);
     const navigate = useNavigate();
-    const { projects, loading: loadingProjects, error: errorProjects } = useSavedProjects();
+    const { projects, loading: loadingProjects, error: errorProjects, deleteProject } = useSavedProjects();
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -35,6 +38,13 @@ export function CreatorStudioLayout({ children, currentView, onViewChange }: Cre
             }
         });
     }, []);
+
+    const handleDelete = async (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+        if (confirm("¿Estás seguro de eliminar este proyecto?")) {
+            await deleteProject(id);
+        }
+    };
 
     return (
         <div className="flex h-screen w-full overflow-hidden bg-background">
@@ -86,9 +96,8 @@ export function CreatorStudioLayout({ children, currentView, onViewChange }: Cre
                         <h3 className="px-4 text-xs font-semibold text-muted-foreground mb-2">
                             Saved Projects
                         </h3>
-                        {/* Replaced ScrollArea with native scroll due to crash */}
                         {/* Saved Projects List */}
-                        <div className="h-[300px] overflow-y-auto px-2">
+                        <div className="h-[300px] overflow-y-auto px-2 space-y-1">
                             {loadingProjects ? (
                                 <div className="p-4 text-center text-xs text-muted-foreground">
                                     <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
@@ -103,21 +112,34 @@ export function CreatorStudioLayout({ children, currentView, onViewChange }: Cre
                                     No hay proyectos
                                 </div>
                             ) : (
-                                <div className="space-y-1">
-                                    {projects.map((project) => (
-                                        <Button
-                                            key={project.id}
-                                            variant="ghost"
-                                            className="w-full justify-start text-xs h-auto py-2 px-2 overflow-hidden"
-                                            onClick={() => onViewChange('editor')} // TODO: Open specific project
-                                        >
-                                            <div className="flex flex-col items-start text-left w-full truncate">
-                                                <span className="font-medium truncate w-full">{project.title}</span>
-                                                <span className="text-[10px] text-muted-foreground capitalize">{project.status}</span>
-                                            </div>
-                                        </Button>
-                                    ))}
-                                </div>
+                                projects.map((project) => (
+                                    <div key={project.id} className="group border rounded-md mb-1 hover:border-primary/30 transition-colors">
+                                        <div className="flex flex-col items-start text-left w-full p-2">
+                                            <span className="font-medium truncate w-full text-xs">{project.title}</span>
+                                            <span className="text-[10px] text-muted-foreground capitalize">{project.status}</span>
+                                        </div>
+                                        <div className="flex gap-1 px-2 pb-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Button
+                                                variant="secondary"
+                                                size="sm"
+                                                className="h-6 text-[10px] flex-1"
+                                                onClick={() => onLoadProject?.(project)}
+                                            >
+                                                <Play className="w-3 h-3 mr-1" />
+                                                Usar
+                                            </Button>
+                                            <Button
+                                                variant="destructive"
+                                                size="sm"
+                                                className="h-6 text-[10px]"
+                                                onClick={(e) => handleDelete(e, project.id)}
+                                            >
+                                                <Trash2 className="w-3 h-3 mr-1" />
+                                                Descartar
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))
                             )}
                         </div>
                     </div>

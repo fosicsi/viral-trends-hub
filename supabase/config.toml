@@ -6,3 +6,12 @@ verify_jwt = false
 
 [functions.channel-integration]
 verify_jwt = false
+
+[functions.ai-creator-studio]
+verify_jwt = false
+
+[functions.youtube-analytics-collector]
+verify_jwt = false
+
+[functions.get-morning-opportunities]
+verify_jwt = false

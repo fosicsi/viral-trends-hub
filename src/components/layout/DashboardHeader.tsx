@@ -87,52 +87,43 @@ export function DashboardHeader({
                     </div>
                 </form>
 
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground">
-                                        <Bell className="h-5 w-5" />
-                                        {/* Status Indicator */}
-                                        <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
-                                            {isOnline ? (
-                                                <>
-                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                                                </>
-                                            ) : (
-                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                                            )}
-                                        </span>
-                                        <span className="sr-only">Estado del Sistema</span>
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-80">
-                                    <DropdownMenuLabel className="flex items-center justify-between">
-                                        Estado del Sistema
-                                        {isOnline ? (
-                                            <span className="text-xs font-normal text-green-500 flex items-center gap-1">
-                                                <Wifi className="h-3 w-3" /> Online
-                                            </span>
-                                        ) : (
-                                            <span className="text-xs font-normal text-red-500 flex items-center gap-1">
-                                                <WifiOff className="h-3 w-3" /> Offline
-                                            </span>
-                                        )}
-                                    </DropdownMenuLabel>
-                                    <DropdownMenuSeparator />
-                                    <div className="py-8 text-center text-sm text-muted-foreground">
-                                        <p>{isOnline ? "Todos los sistemas operativos." : "Comprueba tu conexión a internet."}</p>
-                                    </div>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>{isOnline ? "Sistema Online" : "Sin Conexión"}</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground">
+                            <Bell className="h-5 w-5" />
+                            {/* Status Indicator */}
+                            <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                                {isOnline ? (
+                                    <>
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                    </>
+                                ) : (
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                                )}
+                            </span>
+                            <span className="sr-only">Estado del Sistema</span>
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-80">
+                        <DropdownMenuLabel className="flex items-center justify-between">
+                            Estado del Sistema
+                            {isOnline ? (
+                                <span className="text-xs font-normal text-green-500 flex items-center gap-1">
+                                    <Wifi className="h-3 w-3" /> Online
+                                </span>
+                            ) : (
+                                <span className="text-xs font-normal text-red-500 flex items-center gap-1">
+                                    <WifiOff className="h-3 w-3" /> Offline
+                                </span>
+                            )}
+                        </DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <div className="py-8 text-center text-sm text-muted-foreground">
+                            <p>{isOnline ? "Todos los sistemas operativos." : "Comprueba tu conexión a internet."}</p>
+                        </div>
+                    </DropdownMenuContent>
+                </DropdownMenu>
 
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>

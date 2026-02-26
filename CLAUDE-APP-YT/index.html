@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CreatorPilot — Tu Copiloto para YouTube</title>
+    <meta name="description" content="Asistente IA para YouTubers novatos. Genera guiones virales, optimiza SEO y planifica tu contenido.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- ONBOARDING OVERLAY -->
+    <div id="onboarding" class="overlay" style="display:none;">
+        <div class="onboard-card">
+            <div class="onboard-icon">🚀</div>
+            <h2>Bienvenido a CreatorPilot</h2>
+            <p>Necesitamos tu API Key de Google AI Studio para conectar con Gemini.<br>
+            Es gratis. <a href="https://aistudio.google.com/app/apikey" target="_blank">Conseguila acá →</a></p>
+            <input type="text" id="apiKeyInput" placeholder="AIzaSy..." autocomplete="off">
+            <button id="saveKeyBtn" class="btn-primary">Activar Piloto Automático</button>
+        </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div id="app">
+        <!-- SIDEBAR -->
+        <nav class="sidebar">
+            <div class="sidebar-logo">
+                <span class="logo-icon">✦</span>
+                <span class="logo-text">CreatorPilot</span>
+            </div>
+            <div class="nav-links">
+                <button class="nav-btn active" data-view="dashboard">
+                    <span class="nav-icon">📊</span> Dashboard
+                </button>
+                <button class="nav-btn" data-view="script">
+                    <span class="nav-icon">✍️</span> Guionista IA
+                </button>
+                <button class="nav-btn" data-view="seo">
+                    <span class="nav-icon">🔍</span> SEO Wizard
+                </button>
+                <button class="nav-btn" data-view="ideas">
+                    <span class="nav-icon">💡</span> Mis Ideas
+                </button>
+            </div>
+            <div class="sidebar-footer">
+                <button class="nav-btn" id="settingsBtn">
+                    <span class="nav-icon">⚙️</span> Config
+                </button>
+                <div class="api-status" id="apiStatus">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Desconectado</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- CONTENT -->
+        <main class="content">
+            <!-- DASHBOARD VIEW -->
+            <section id="view-dashboard" class="view active">
+                <div class="view-header">
+                    <h1>Buenos días, Creator 👋</h1>
+                    <p class="subtitle">¿Qué vamos a crear hoy?</p>
+                </div>
+                <div class="quick-actions">
+                    <button class="action-card" onclick="switchView('script')">
+                        <div class="action-icon">✍️</div>
+                        <h3>Generar Guion</h3>
+                        <p>Crea un guion viral con IA en segundos</p>
+                    </button>
+                    <button class="action-card" onclick="switchView('seo')">
+                        <div class="action-icon">🔍</div>
+                        <h3>Optimizar SEO</h3>
+                        <p>Títulos, descripciones y hashtags perfectos</p>
+                    </button>
+                    <button class="action-card" onclick="switchView('ideas')">
+                        <div class="action-icon">💡</div>
+                        <h3>Mis Ideas</h3>
+                        <p>Guarda y organiza tus próximos videos</p>
+                    </button>
+                </div>
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <span class="stat-number" id="statScripts">0</span>
+                        <span class="stat-label">Guiones Generados</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="statIdeas">0</span>
+                        <span class="stat-label">Ideas Guardadas</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="statSeo">0</span>
+                        <span class="stat-label">SEO Optimizados</span>
+                    </div>
+                </div>
+                <!-- Tips Section -->
+                <div class="tips-section">
+                    <h3>💡 Tip del Día</h3>
+                    <div class="tip-card" id="dailyTip">
+                        <p>Los primeros 3 segundos de tu video son los más importantes. Empieza con una pregunta o afirmación impactante para retener a tu audiencia.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SCRIPT GENERATOR VIEW -->
+            <section id="view-script" class="view">
+                <div class="view-header">
+                    <h1>✍️ Guionista IA</h1>
+                    <p class="subtitle">Genera guiones virales optimizados para retención</p>
+                </div>
+                <div class="generator-form">
+                    <div class="form-group">
+                        <label>¿De qué trata tu video?</label>
+                        <input type="text" id="scriptTopic" placeholder="Ej: Cómo ganar tus primeros 1000 suscriptores..." class="input-lg">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Formato</label>
+                            <div class="toggle-group">
+                                <button class="toggle-btn active" data-format="long">📹 Video Largo</button>
+                                <button class="toggle-btn" data-format="short">⚡ Short</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Tono</label>
+                            <select id="scriptTone" class="select-input">
+                                <option value="energetico">🔥 Energético</option>
+                                <option value="educativo">📚 Educativo</option>
+                                <option value="casual">😎 Casual</option>
+                                <option value="motivacional">💪 Motivacional</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button id="generateScriptBtn" class="btn-generate" disabled>
+                        <span class="btn-text">✨ Generar Guion con Gemini</span>
+                        <span class="btn-loading" style="display:none;">
+                            <span class="spinner"></span> Generando...
+                        </span>
+                    </button>
+                </div>
+                <!-- RESULT -->
+                <div id="scriptResult" class="result-container" style="display:none;">
+                    <div class="result-header">
+                        <h2 id="resultTitle">Guion Generado</h2>
+                        <div class="result-actions">
+                            <button class="btn-icon" onclick="copyResult('script')" title="Copiar Todo">📋</button>
+                            <button class="btn-icon" onclick="saveAsIdea()" title="Guardar como Idea">💾</button>
+                        </div>
+                    </div>
+                    <div class="script-sections" id="scriptSections"></div>
+                </div>
+            </section>
+
+            <!-- SEO VIEW -->
+            <section id="view-seo" class="view">
+                <div class="view-header">
+                    <h1>🔍 SEO Wizard</h1>
+                    <p class="subtitle">Optimiza títulos, descripciones y hashtags</p>
+                </div>
+                <div class="generator-form">
+                    <div class="form-group">
+                        <label>¿Sobre qué es tu video?</label>
+                        <input type="text" id="seoTopic" placeholder="Describe brevemente tu video..." class="input-lg">
+                    </div>
+                    <button id="generateSeoBtn" class="btn-generate" disabled>
+                        <span class="btn-text">🎯 Optimizar SEO</span>
+                        <span class="btn-loading" style="display:none;">
+                            <span class="spinner"></span> Analizando...
+                        </span>
+                    </button>
+                </div>
+                <div id="seoResult" class="result-container" style="display:none;">
+                    <div class="seo-grid">
+                        <div class="seo-card">
+                            <h3>🎯 Títulos Sugeridos</h3>
+                            <ul id="seoTitles" class="seo-list"></ul>
+                        </div>
+                        <div class="seo-card">
+                            <h3>📝 Descripción SEO</h3>
+                            <div id="seoDescription" class="seo-text"></div>
+                            <button class="btn-sm" onclick="copyText('seoDescription')">Copiar</button>
+                        </div>
+                        <div class="seo-card">
+                            <h3>#️⃣ Hashtags</h3>
+                            <div id="seoHashtags" class="hashtag-cloud"></div>
+                            <button class="btn-sm" onclick="copyText('seoHashtags')">Copiar Todos</button>
+                        </div>
+                        <div class="seo-card">
+                            <h3>🏷️ Tags de Video</h3>
+                            <div id="seoTags" class="tag-cloud"></div>
+                            <button class="btn-sm" onclick="copyText('seoTags')">Copiar Tags</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- IDEAS VIEW -->
+            <section id="view-ideas" class="view">
+                <div class="view-header">
+                    <div class="header-row">
+                        <div>
+                            <h1>💡 Mis Ideas</h1>
+                            <p class="subtitle">Tu backlog de contenido</p>
+                        </div>
+                        <button class="btn-primary btn-sm" onclick="showNewIdeaForm()">+ Nueva Idea</button>
+                    </div>
+                </div>
+                <div id="newIdeaForm" class="idea-form" style="display:none;">
+                    <input type="text" id="newIdeaTitle" placeholder="Título de la idea..." class="input-lg">
+                    <textarea id="newIdeaDesc" placeholder="Notas adicionales..." rows="3" class="input-lg"></textarea>
+                    <div class="form-row">
+                        <select id="newIdeaPriority" class="select-input">
+                            <option value="alta">🔴 Alta Prioridad</option>
+                            <option value="media">🟡 Media</option>
+                            <option value="baja">🟢 Baja</option>
+                        </select>
+                        <button class="btn-primary" onclick="addIdea()">Guardar Idea</button>
+                        <button class="btn-ghost" onclick="hideNewIdeaForm()">Cancelar</button>
+                    </div>
+                </div>
+                <div id="ideasList" class="ideas-grid"></div>
+                <div id="ideasEmpty" class="empty-state">
+                    <div class="empty-icon">📭</div>
+                    <h3>No tenés ideas guardadas</h3>
+                    <p>Empezá generando un guion o agregá una idea manualmente</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

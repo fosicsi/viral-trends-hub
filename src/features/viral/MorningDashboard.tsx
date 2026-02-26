@@ -214,8 +214,6 @@ export function MorningDashboard({
     // -- Load morning opportunities --
     useEffect(() => {
         const loadOps = async () => {
-            if (!detectedNiche) return;
-
             // Try cache first
             const cachedArr = localStorage.getItem('vth_ops_cache');
             if (cachedArr) {
@@ -224,14 +222,31 @@ export function MorningDashboard({
                     if (Date.now() - parsed.timestamp < 12 * 60 * 60 * 1000) { // 12h cache
                         setOpportunities(parsed.data);
                         setOpsLoading(false);
+                        return; // Use cache, don't call API
                     }
                 } catch { /* ignore */ }
             }
 
-            if (!opportunities.length) setOpsLoading(true);
+            setOpsLoading(true);
             setOpsError(null);
+
             try {
-                const res = await getMorningOpportunities(detectedNiche);
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) {
+                    setOpsLoading(false);
+                    return;
+                }
+
+                // Build keywords: prefer detectedNiche, fallback to user_metadata niche_keywords
+                let keywords = detectedNiche;
+                if (!keywords) {
+                    const nicheKeywords = session.user.user_metadata?.niche_keywords || [];
+                    if (nicheKeywords.length > 0) {
+                        keywords = nicheKeywords.join(', ');
+                    }
+                }
+
+                const res = await getMorningOpportunities(keywords || undefined);
                 if (res.success) {
                     setOpportunities(res.data as any[]);
                     localStorage.setItem('vth_ops_cache', JSON.stringify({

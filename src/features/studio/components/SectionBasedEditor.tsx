@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Save, Copy, Check, Clock, Eye, Mic, Tag } from "lucide-react";
+import { Save, Copy, Check, Clock, Eye, Mic, Tag, Image as ImageIcon, Sparkles, Loader2, RefreshCw } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ScriptSection {
     id: string;
@@ -15,6 +16,8 @@ interface ScriptSection {
     visual: string;
     audio: string;
     placeholder?: string;
+    storyboardImage?: string; // New field for Nano Banana feature
+    isGeneratingStoryboard?: boolean;
 }
 
 interface SectionBasedEditorProps {
@@ -102,6 +105,31 @@ export function SectionBasedEditor({ initialScript, onSave }: SectionBasedEditor
 
     const handleAudioChange = (id: string, value: string) => {
         setSections(prev => prev.map(s => s.id === id ? { ...s, audio: value } : s));
+    };
+
+    const generateStoryboard = async (sectionId: string, visualDescription: string) => {
+        if (!visualDescription?.trim()) {
+            toast({ title: "Sin descripción", description: "Escribe o genera una descripción visual primero.", variant: "destructive" });
+            return;
+        }
+
+        setSections(prev => prev.map(s => s.id === sectionId ? { ...s, isGeneratingStoryboard: true } : s));
+
+        try {
+            const { data, error } = await supabase.functions.invoke('ai-storyboard-generator', {
+                body: { visualDescription }
+            });
+
+            if (error) throw error;
+            if (!data?.image) throw new Error("No image returned");
+
+            setSections(prev => prev.map(s => s.id === sectionId ? { ...s, storyboardImage: data.image, isGeneratingStoryboard: false } : s));
+            toast({ title: "✅ Boceto generado" });
+        } catch (e: any) {
+            console.error("Storyboard Error:", e);
+            toast({ title: "Error", description: e.message || "No se pudo generar el boceto.", variant: "destructive" });
+            setSections(prev => prev.map(s => s.id === sectionId ? { ...s, isGeneratingStoryboard: false } : s));
+        }
     };
 
     const handleSave = () => {
@@ -200,44 +228,71 @@ export function SectionBasedEditor({ initialScript, onSave }: SectionBasedEditor
             {/* Script Sections */}
             <div className="grid gap-5">
                 {sections.map((section) => (
-                    <Card key={section.id} className={`border-l-4 ${getSectionColor(section.title)}`}>
-                        <CardHeader className="pb-2">
+                    <Card key={section.id} className={`border-l-4 ${getSectionColor(section.title)} overflow-hidden`}>
+                        <CardHeader className="pb-2 bg-secondary/20">
                             <CardTitle className="text-sm font-medium flex items-center justify-between">
                                 <span className="flex items-center gap-2">
                                     {section.title}
                                 </span>
                                 {section.time && (
-                                    <span className="text-xs font-normal text-muted-foreground bg-secondary px-2 py-0.5 rounded flex items-center gap-1">
+                                    <span className="text-xs font-normal text-muted-foreground bg-background border px-2 py-0.5 rounded flex items-center gap-1">
                                         <Clock className="w-3 h-3" />
                                         {section.time}
                                     </span>
                                 )}
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-3">
-                            {/* Visual */}
-                            <div className="space-y-1">
-                                <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <Eye className="w-3 h-3" /> Visual (qué se ve en pantalla)
-                                </Label>
-                                <Textarea
-                                    className="min-h-[60px] resize-y text-sm leading-relaxed bg-blue-50/50 dark:bg-blue-950/20"
-                                    placeholder="Descripción de lo que se ve..."
-                                    value={section.visual}
-                                    onChange={(e) => handleVisualChange(section.id, e.target.value)}
-                                />
-                            </div>
-                            {/* Audio */}
-                            <div className="space-y-1">
-                                <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <Mic className="w-3 h-3" /> Audio (qué dice el creador)
-                                </Label>
-                                <Textarea
-                                    className="min-h-[80px] resize-y font-mono text-sm leading-relaxed"
-                                    placeholder="Texto que dice el creador..."
-                                    value={section.audio}
-                                    onChange={(e) => handleAudioChange(section.id, e.target.value)}
-                                />
+                        <CardContent className="space-y-4 pt-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Visual Area */}
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                                            <Eye className="w-3 h-3" /> Visual (B-Roll)
+                                        </Label>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 text-[10px] px-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50"
+                                            onClick={() => generateStoryboard(section.id, section.visual)}
+                                            disabled={section.isGeneratingStoryboard || !section.visual?.trim()}
+                                        >
+                                            {section.isGeneratingStoryboard ? (
+                                                <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                            ) : (
+                                                <Sparkles className="w-3 h-3 mr-1" />
+                                            )}
+                                            {section.storyboardImage ? 'Regenerar Boceto' : 'Generar Boceto IA'}
+                                        </Button>
+                                    </div>
+
+                                    {/* Nano Banana Storyboard Render */}
+                                    {section.storyboardImage && (
+                                        <div className="relative w-full aspect-video rounded-md overflow-hidden border bg-black/5 flex items-center justify-center">
+                                            <img src={section.storyboardImage} alt="Storyboard sketch" className="w-full h-full object-cover" />
+                                        </div>
+                                    )}
+
+                                    <Textarea
+                                        className="h-full min-h-[100px] resize-y text-sm leading-relaxed bg-blue-50/50 dark:bg-blue-950/20 border-dashed"
+                                        placeholder="Descripción de lo que se ve..."
+                                        value={section.visual}
+                                        onChange={(e) => handleVisualChange(section.id, e.target.value)}
+                                    />
+                                </div>
+
+                                {/* Audio Area */}
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1 h-6">
+                                        <Mic className="w-3 h-3" /> Audio (Locución del Creador)
+                                    </Label>
+                                    <Textarea
+                                        className="h-full min-h-[120px] resize-y font-mono text-sm leading-relaxed"
+                                        placeholder="Texto que dice el creador..."
+                                        value={section.audio}
+                                        onChange={(e) => handleAudioChange(section.id, e.target.value)}
+                                    />
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -282,3 +337,4 @@ export function SectionBasedEditor({ initialScript, onSave }: SectionBasedEditor
         </div>
     );
 }
+

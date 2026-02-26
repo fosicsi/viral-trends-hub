@@ -84,10 +84,11 @@ serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
 
-    } catch (e) {
+    } catch (e: any) {
         console.error("[ai-storyboard-generator] Error:", e);
-        return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unexpected error" }), {
-            status: 500,
+        // Return 200 so supabase-js client doesn't mask the error with "non-2xx status"
+        return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
+            status: 200,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
     }

@@ -121,6 +121,7 @@ export function SectionBasedEditor({ initialScript, onSave }: SectionBasedEditor
             });
 
             if (error) throw error;
+            if (data?.error) throw new Error(data.error);
             if (!data?.image) throw new Error("No image returned");
 
             setSections(prev => prev.map(s => s.id === sectionId ? { ...s, storyboardImage: data.image, isGeneratingStoryboard: false } : s));

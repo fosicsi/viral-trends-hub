@@ -9,9 +9,9 @@ const corsHeaders = {
 };
 
 async function generateStoryboardWithFlash(prompt: string, apiKey: string) {
-    // We use Imagen 3 Fast / Flash equivalent for storyboards to ensure very low latency
-    // In Gemini API, this maps to imagen-3.0-fast-generate-001 (or imagen-3.0-generate-001 with 1 sample)
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-fast-generate-001:predict`;
+    // We use Imagen 3 for storyboards. Since Fast isn't easily available on public API, we use the standard generate-001
+    // with 1 sample to keep it as fast as possible.
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict`;
 
     console.log(`[ai-storyboard-generator] Calling Gemini Fast Imagen API with prompt: ${prompt}`);
 

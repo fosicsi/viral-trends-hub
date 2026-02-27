@@ -15,3 +15,12 @@ verify_jwt = false
 
 [functions.get-morning-opportunities]
 verify_jwt = false
+
+[functions.ai-storyboard-generator]
+verify_jwt = false
+
+[functions.ai-thumbnail-generator]
+verify_jwt = false
+
+[functions.ai-viral-script]
+verify_jwt = false

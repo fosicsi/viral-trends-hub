@@ -21,8 +21,7 @@ export async function getMorningOpportunities(keywords?: string): Promise<{ succ
     const { data, error } = await supabase.functions.invoke("get-morning-opportunities", {
         body: {
             userId: session.user.id,
-            keywords,
-            _t: Date.now() // Force cache bust
+            keywords
         },
         headers: {
             Authorization: `Bearer ${session.access_token}`

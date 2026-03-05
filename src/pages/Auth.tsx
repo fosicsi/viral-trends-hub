@@ -67,6 +67,10 @@ export default function AuthPage() {
                             }
                         }}
                         providers={['google']}
+                        queryParams={{
+                            access_type: 'offline',
+                            prompt: 'consent',
+                        }}
                         view="sign_in"
                         showLinks={true}
                         redirectTo={window.location.origin}

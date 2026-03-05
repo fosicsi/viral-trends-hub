@@ -10,7 +10,7 @@ import { ViralToolsView } from "./components/ViralToolsView";
 import { ViralSortControl, type SortOption } from "./components/ViralSortControl";
 import { ViralGlossaryView } from "./components/ViralGlossaryView";
 import type { ViralFilters, VideoItem } from "./types";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardHeader } from "@/components/layout/DashboardHeader";
 import { MorningDashboard } from "./MorningDashboard"; // Import new Dashboard
@@ -39,7 +39,7 @@ const VIRAL_TOPICS = [
 export default function ViralApp() {
   const navigate = useNavigate();
   const [session, setSession] = React.useState<any>(null);
-  const [view, setView] = React.useState<ViralView | "search">("home"); // Allow "search" view
+  const [view, setView] = React.useState<ViralView>("home"); // Allow "search" view
   const [query, setQuery] = React.useState<string>("");
   const [selected, setSelected] = React.useState<VideoItem | null>(null);
 
@@ -58,6 +58,14 @@ export default function ViralApp() {
 
     return () => subscription.unsubscribe();
   }, [view]);
+
+  const location = useLocation();
+  React.useEffect(() => {
+    if (location.state?.view) {
+      setView(location.state.view as ViralView);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, navigate]);
 
   const [showFilters, setShowFilters] = React.useState(false);
   const [liveResults, setLiveResults] = React.useState<VideoItem[]>([]);
@@ -997,21 +1005,18 @@ export default function ViralApp() {
               )}
             </section>
           )}
-          {(view === "viral" || view === "search" || view === "saved" || view === "tools" || view === "glossary") && (
+          {(view === "viral" || view === "saved" || view === "tools" || view === "glossary") && (
             <section className="max-w-6xl mx-auto px-6 md:px-10 py-16 animate-in fade-in">
               {view === "viral" ? (
                 <MorningDashboard
-                  onExploreMore={() => setView("search")}
+                  onExploreMore={() => navigate('/outliers')}
                   onToggleSave={toggleSaved}
                   isSaved={isSaved}
                   onNavigate={(target) => {
                     if (target === 'analytics') {
                       navigate('/analytics');
                     } else if (target === 'create') {
-                      // Phase 2: will route to ContentCreatorStudio
-                      // For now, go to search as placeholder
-                      setView("search");
-                      toast.info("Estudio de Creación en desarrollo", { description: "Por ahora, usá el buscador + Kit Viral." });
+                      navigate('/studio');
                     } else {
                       setView(target as any);
                     }
@@ -1062,40 +1067,6 @@ export default function ViralApp() {
                     handleSearchGeneric(queryTerm, newFilters, false);
                   }}
                 />
-              ) : view === "search" ? (
-                <div className="space-y-8">
-                  <div className="rounded-[28px] border border-border bg-card p-8 shadow-elev">
-                    <div className="space-y-6">
-                      <div><h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">Buscador de Oportunidades</h2><p className="text-muted-foreground mt-2 max-w-2xl">Encuentra oportunidades específicas.</p></div>
-                      <div className="flex gap-2 w-full">
-                        <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" /><Input placeholder="Busca un nicho..." className="pl-10 h-14 text-lg rounded-2xl bg-surface/50 border-border" value={viralInput} onChange={(e) => setViralInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && runViralSearch()} /></div>
-                        <Button className="h-14 rounded-2xl px-6 font-bold" onClick={() => runViralSearch()} disabled={viralLoading}>{viralLoading ? "..." : "Buscar"}</Button>
-                        <Button variant="glowOutline" className="h-14 rounded-2xl px-6" onClick={() => setShowViralFilters(true)}>Filtros</Button>
-                      </div>
-                      {aiCriteria && (<div className="mt-4 rounded-2xl border border-border bg-surface px-4 py-3"><p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Criterio IA</p><p className="mt-1 text-sm"><span className="font-extrabold">Topic:</span> {viralTopic}</p><p className="mt-2 text-sm text-muted-foreground">{aiCriteria}</p></div>)}
-                      <div className="flex items-center justify-between pt-2">
-                        <div className="flex flex-wrap gap-2">{VIRAL_TOPICS.map((t) => (<button key={t} onClick={() => { setViralTopic(t); setViralInput(t); runViralSearch(t); }} className={`px-3 py-1.5 rounded-xl text-sm font-bold border ${t === viralTopic ? 'border-primary/40 bg-primary/10' : 'border-border bg-surface text-muted-foreground'}`}>{t}</button>))}</div>
-                        <Button variant="hero" className="rounded-xl shrink-0" onClick={() => { const next = VIRAL_TOPICS[Math.floor(Math.random() * VIRAL_TOPICS.length)]; setViralTopic(next); setViralInput(next); runViralSearch(next); }}>Sorpréndeme</Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {!viralLoading && hasViralSearched && viralResults.length === 0 && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
-                      <EmptyState onRetry={() => setShowViralFilters(true)} />
-                    </motion.div>
-                  )}
-
-                  {!viralLoading && viralResults.length > 0 && (
-                    <>
-                      <ViralSortControl value={viralSortBy} onChange={setViralSortBy} />
-                      <NicheInsightsBar items={viralResults} onKeywordClick={handleTagClick} />
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {sortedViralResults.map((v) => <ViralVideoCard key={v.id} video={v} onOpen={setSelected} saved={isSaved(v.id)} onToggleSave={toggleSaved} onTagClick={handleTagClick} />)}
-                      </div>
-                    </>
-                  )}
-                </div>
               ) : view === "saved" ? (
                 <div className="container mx-auto px-6 py-8">
                   <ViralSavedView

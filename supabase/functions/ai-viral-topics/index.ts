@@ -38,7 +38,9 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     )
 
-    const { data: { user } } = await supabaseClient.auth.getUser()
+    const authHeader = req.headers.get('Authorization') || '';
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user } } = await supabaseClient.auth.getUser(token);
     const userApiKey = user ? await getUserApiKey(supabaseClient, user.id, 'gemini') : null;
 
     const body = await req.json().catch(() => ({}));

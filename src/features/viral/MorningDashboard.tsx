@@ -437,7 +437,7 @@ export function MorningDashboard({
             gradient: 'from-rose-600/20 to-orange-600/5',
             border: 'border-rose-500/20 hover:border-rose-500/40',
             iconBg: 'bg-rose-500/15 text-rose-400',
-            action: () => { onQuickFilter('joya oculta', detectedNiche); },
+            action: () => onNavigate('search'),
         },
         {
             title: 'Crear Contenido',

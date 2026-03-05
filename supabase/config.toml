@@ -24,3 +24,7 @@ verify_jwt = false
 
 [functions.ai-viral-script]
 verify_jwt = false
+
+[functions.youtube-outlier-search]
+verify_jwt = false
+

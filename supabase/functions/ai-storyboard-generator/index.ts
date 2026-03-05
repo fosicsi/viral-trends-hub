@@ -9,17 +9,15 @@ const corsHeaders = {
 };
 
 async function generateStoryboardWithFlash(prompt: string, apiKey: string) {
-    // We use Imagen 3 for storyboards. Since Fast isn't easily available on public API, we use the standard generate-001
-    // with 1 sample to keep it as fast as possible.
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict`;
+    // We use Imagen 3 for storyboards.
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
 
     console.log(`[ai-storyboard-generator] Calling Gemini Fast Imagen API with prompt: ${prompt}`);
 
     const response = await fetch(url, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': apiKey
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify({
             instances: [
@@ -62,8 +60,9 @@ serve(async (req) => {
             { global: { headers: { Authorization: authHeader } } }
         );
 
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        if (!user) throw new Error("Unauthorized");
+        const token = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+        if (authError || !user) throw new Error(`Unauthorized. Auth Error: ${authError?.message}`);
 
         let apiKey = await getUserApiKey(supabaseClient, user.id, 'gemini');
         if (!apiKey) {

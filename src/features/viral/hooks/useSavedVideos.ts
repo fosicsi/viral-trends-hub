@@ -22,7 +22,6 @@ export function useSavedVideos() {
         .from('content_creation_plan' as any)
         .select('*')
         .eq('user_id', session.user.id)
-        .eq('status', 'idea')
         .order('created_at', { ascending: false });
 
       if (planError) {

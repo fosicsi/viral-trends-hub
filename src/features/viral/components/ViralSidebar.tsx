@@ -9,11 +9,13 @@ import {
   LogOut,
   User,
   LayoutDashboard,
-  Clapperboard
+  Clapperboard,
+  Target
 } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 
-export type ViralView = "home" | "viral" | "videos" | "saved" | "tools" | "glossary" | "search";
+export type ViralView = "home" | "viral" | "videos" | "saved" | "tools" | "glossary";
 
 interface ViralSidebarProps {
   view: ViralView;
@@ -47,7 +49,13 @@ export function ViralSidebar({
     label: string
   }) => (
     <button
-      onClick={() => onChangeView(id)}
+      onClick={() => {
+        if (location.pathname !== '/' && ['viral', 'saved', 'glossary', 'tools'].includes(id)) {
+          navigate('/', { state: { view: id } });
+        } else {
+          onChangeView(id);
+        }
+      }}
       className={cn(
         "group flex w-full flex-col items-center justify-center gap-1 rounded-2xl p-3 transition-all duration-300",
         view === id
@@ -80,8 +88,29 @@ export function ViralSidebar({
         <nav className="flex flex-col gap-3 mt-4">
           <NavItem id="viral" icon={Home} label="Inicio" />
 
-          <NavItem id="search" icon={Search} label="Buscar" />
+
+
+          <button
+            onClick={() => navigate('/outliers')}
+            className={cn(
+              "group flex w-full flex-col items-center justify-center gap-1 rounded-2xl p-3 transition-all duration-300",
+              location.pathname.startsWith('/outliers')
+                ? "bg-primary/10 text-primary shadow-glow-sm"
+                : "text-muted-foreground hover:bg-surface hover:text-foreground"
+            )}
+          >
+            <Target
+              className={cn(
+                "h-6 w-6 transition-transform duration-300 group-hover:scale-110",
+                location.pathname.startsWith('/outliers') ? "text-primary" : "text-muted-foreground"
+              )}
+              strokeWidth={location.pathname.startsWith('/outliers') ? 2.5 : 2}
+            />
+            <span className="text-[10px] font-bold tracking-wide">Outliers</span>
+          </button>
+
           <NavItem id="saved" icon={Bookmark} label="Guardado" />
+
 
           <button
             onClick={() => navigate('/studio')}
@@ -122,6 +151,29 @@ export function ViralSidebar({
           </button>
         </nav>
       </div>
-    </aside >
+
+      {/* Bottom: User, Settings & Theme */}
+      <div className="flex flex-col gap-4 items-center mb-2">
+
+        {/* Bottom Utils */}
+        <div className="flex flex-col gap-2 w-full px-2">
+          <NavItem id="glossary" icon={HelpCircle} label="Glosario" />
+        </div>
+
+
+        {/* Interruptor de Tema */}
+        <button
+          onClick={onToggleTheme}
+          className="group flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-all hover:bg-surface hover:text-yellow-400"
+          title={isDark ? "Cambiar a modo día" : "Cambiar a modo noche"}
+        >
+          {isDark ? (
+            <Sun className="h-6 w-6 transition-transform group-hover:rotate-90 group-hover:scale-110" />
+          ) : (
+            <Moon className="h-6 w-6 transition-transform group-hover:-rotate-12 group-hover:scale-110" />
+          )}
+        </button>
+      </div>
+    </aside>
   );
 }

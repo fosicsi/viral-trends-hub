@@ -13,6 +13,8 @@ import AnalyticsDashboard from "./features/analytics/pages/AnalyticsDashboard";
 import AnalyticsSettings from "./features/analytics/pages/AnalyticsSettings";
 import CreatorStudio from "./features/studio/pages/CreatorStudio";
 import Profile from "./pages/Profile";
+import { OutliersLayout } from "./features/outliers/layout/OutliersLayout";
+import OutlierSearchPage from "./features/outliers/pages/OutlierSearchPage";
 
 import Onboarding from "./pages/Onboarding";
 import OnboardingGuard from "./components/auth/OnboardingGuard";
@@ -60,6 +62,14 @@ const App = () => (
               <CreatorStudio />
             </OnboardingGuard>
           } />
+
+          <Route path="/outliers" element={
+            <OnboardingGuard>
+              <OutliersLayout />
+            </OnboardingGuard>
+          }>
+            <Route index element={<OutlierSearchPage />} />
+          </Route>
 
           <Route path="/profile" element={
             <OnboardingGuard>

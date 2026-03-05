@@ -50,8 +50,10 @@ export function ViralSavedView({
   const [sortBy, setSortBy] = React.useState<SortOption>("recent");
 
   // Separate content - memoized
-  const ideas = React.useMemo(() => saved.filter(item => item.sourceTable === 'content_creation_plan'), [saved]);
-  const references = React.useMemo(() => saved.filter(item => item.sourceTable !== 'content_creation_plan'), [saved]);
+  // Referencias: Son videos crudos guardados directamente desde Búsqueda (sin guion asociado todavía)
+  const references = React.useMemo(() => saved.filter(item => !item.scriptContent && item.scriptStatus !== 'done'), [saved]);
+  // Mis Ideas: Son proyectos que ya pasaron por la IA y tienen su guion/metadata listo
+  const ideas = React.useMemo(() => saved.filter(item => !!item.scriptContent || item.scriptStatus === 'done'), [saved]);
 
   // Sorting logic helper
   const sortData = React.useCallback((data: VideoItem[]) => {

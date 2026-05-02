@@ -16,7 +16,7 @@ export function generateSmartAlerts(metrics: any | null, lastVideo: any): SmartA
 
     // 1. CONSISTENCY CHECK
     // Assuming metrics.lastUploadDate exists or we derive it from lastVideo
-    const lastUpload = new Date(lastVideo.publishedAt);
+    const lastUpload = new Date(lastVideo.publishedAt || Date.now());
     const today = new Date();
     const daysSinceUpload = Math.floor((today.getTime() - lastUpload.getTime()) / (1000 * 60 * 60 * 24));
 
@@ -41,7 +41,7 @@ export function generateSmartAlerts(metrics: any | null, lastVideo: any): SmartA
     // 2. PERFORMANCE CHECK (Base views vs Last Video)
     // Avoid division by zero
     const avgViews = metrics.views?.average || 1000;
-    const lastViews = parseInt(lastVideo.statistics?.viewCount || "0");
+    const lastViews = lastVideo.views || 0;
 
     if (avgViews > 0) {
         if (lastViews < avgViews * 0.4) {
@@ -49,15 +49,19 @@ export function generateSmartAlerts(metrics: any | null, lastVideo: any): SmartA
                 id: "perf-drop",
                 type: "critical",
                 title: "Bajo Rendimiento Detectado",
-                message: "Tu último video tiene un 60% menos de vistas que tu promedio. Revisa la miniatura y el título.",
+                message: metrics.isShorts 
+                    ? "Tu último Short tiene un 60% menos de vistas. Posiblemente el gancho visual falló y no retuvo al Feed inicial." 
+                    : "Tu último video tiene un 60% menos de vistas que tu promedio. Revisa la miniatura y el título.",
                 date: "Reciente"
             });
         } else if (lastViews > avgViews * 1.5) {
             alerts.push({
                 id: "perf-spike",
                 type: "opportunity",
-                title: "¡Video Disparado!",
-                message: `El último video supera tu promedio por 50%. Analiza qué funcionó y replícalo pronto.`,
+                title: "¡Tracción Disparada!",
+                message: metrics.isShorts 
+                    ? `El último Short supera tu promedio por 50%. El Feed te está impulsando, analiza qué gancho usaste.`
+                    : `El último video supera tu promedio por 50%. Analiza qué funcionó y replícalo pronto.`,
                 date: "Reciente"
             });
         }

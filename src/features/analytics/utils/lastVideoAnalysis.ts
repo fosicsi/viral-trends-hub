@@ -63,6 +63,7 @@ export interface LastVideoAnalysis {
         description: string;
         primaryIssue?: 'ctr' | 'retention' | 'engagement';
     };
+    isShorts: boolean; // NEW: Format context
 }
 
 /**
@@ -246,7 +247,8 @@ export async function getChannelAverages(recentVideos: YouTubeVideo[]): Promise<
  */
 function generateVerdict(comparison: LastVideoAnalysis['comparison'], isShort: boolean): LastVideoAnalysis['verdict'] {
     // Identify the biggest problem
-    const issues: { metric: 'ctr' | 'retention' | 'engagement'; diff: number }[] = [
+    const issues: { metric: 'views' | 'ctr' | 'retention' | 'engagement'; diff: number }[] = [
+        { metric: 'views', diff: comparison.views.vsAvg },
         { metric: 'ctr', diff: comparison.ctr.vsAvg },
         { metric: 'retention', diff: comparison.retention.vsAvg },
     ];
@@ -263,7 +265,16 @@ function generateVerdict(comparison: LastVideoAnalysis['comparison'], isShort: b
 
     // Context-aware messages (Shorts vs Long-form)
     if (severity === 'critical') {
-        if (worstIssue.metric === 'ctr') {
+        if (worstIssue.metric === 'views') {
+            return {
+                severity,
+                title: isShort ? 'Caída de Tracción en Feed' : 'Fuerte Caída de Vistas',
+                description: isShort
+                    ? `El Short tiene ${Math.abs(worstIssue.diff).toFixed(0)}% menos vistas. El algoritmo de Shorts dejó de impulsarlo, evalúa si la temática era demasiado nicho.`
+                    : `El video tiene ${Math.abs(worstIssue.diff).toFixed(0)}% menos vistas que tu promedio. El tema puede no haber interesado a tus suscriptores core.`,
+                primaryIssue: 'views' as any,
+            };
+        } else if (worstIssue.metric === 'ctr') {
             return {
                 severity,
                 title: isShort ? 'Short Ignorado en el Feed' : 'Thumbnail/Título Falló',
@@ -410,6 +421,7 @@ export async function analyzeLastVideo(): Promise<LastVideoAnalysis | null> {
             scores,
             comparison,
             verdict,
+            isShorts: isShort,
         };
     } catch (error) {
         console.error('[analyzeLastVideo] Error analyzing last video:', error);

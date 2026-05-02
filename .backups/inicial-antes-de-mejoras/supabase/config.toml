@@ -1,0 +1,30 @@
+[functions.youtube-search]
+verify_jwt = false
+
+[functions.ai-viral-topics]
+verify_jwt = false
+
+[functions.channel-integration]
+verify_jwt = false
+
+[functions.ai-creator-studio]
+verify_jwt = false
+
+[functions.youtube-analytics-collector]
+verify_jwt = false
+
+[functions.get-morning-opportunities]
+verify_jwt = false
+
+[functions.ai-storyboard-generator]
+verify_jwt = false
+
+[functions.ai-thumbnail-generator]
+verify_jwt = false
+
+[functions.ai-viral-script]
+verify_jwt = false
+
+[functions.youtube-outlier-search]
+verify_jwt = false
+

@@ -4,7 +4,8 @@ import { motion } from 'framer-motion';
 import {
     Zap, RefreshCcw, Search, ExternalLink, TrendingUp, AlertCircle,
     PlayCircle, Target, BarChart3, Eye, Users, Activity, Info,
-    Lightbulb, Clock, Flame, ChevronRight, Sparkles, ArrowUpRight
+    Lightbulb, Clock, Flame, ChevronRight, Sparkles, ArrowUpRight,
+    Compass
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +15,7 @@ import { ViralVideoCard } from './components/ViralVideoCard';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { integrationsApi } from '@/lib/api/integrations';
+import { EnhancedDashboard } from './components/EnhancedDashboard';
 
 import { VideoItem } from './types';
 
@@ -82,6 +84,7 @@ export function MorningDashboard({
     // -- State --
     const [stats, setStats] = useState<VitalStats>({ views48h: 0, ctr48h: 0, avgViewPct48h: 0, subsGained48h: 0, fetchedAt: null, videoCount: 0 });
     const [statsLoading, setStatsLoading] = useState(true);
+    const [authRevoked, setAuthRevoked] = useState(false);
     const [detectedNiche, setDetectedNiche] = useState<string>('');
     const [opportunities, setOpportunities] = useState<MorningItem[]>([]);
     const [opsLoading, setOpsLoading] = useState(true);
@@ -154,8 +157,9 @@ export function MorningDashboard({
                         avgViewPct48h = totalDays > 0 ? totalPct / totalDays : 0;
                     }
                     if (mainReport?.fetchedAt) fetchedAt = mainReport.fetchedAt;
-                } catch (e) {
+                } catch (e: any) {
                     console.warn('Home: main metrics fetch failed', e);
+                    if (e.message === 'AUTH_REVOKED') setAuthRevoked(true);
                 }
 
                 // 2. CTR metric (separate — incompatible with subscription metrics)
@@ -175,8 +179,9 @@ export function MorningDashboard({
                         ctr48h = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
                     }
                     if (!fetchedAt && ctrReport?.fetchedAt) fetchedAt = ctrReport.fetchedAt;
-                } catch (e) {
+                } catch (e: any) {
                     console.warn('Home: CTR fetch failed', e);
+                    if (e.message === 'AUTH_REVOKED') setAuthRevoked(true);
                 }
 
                 const newStats = { views48h, ctr48h, avgViewPct48h, subsGained48h, fetchedAt, videoCount: 0 };
@@ -458,7 +463,14 @@ export function MorningDashboard({
     })();
 
     return (
-        <div className="w-full max-w-6xl mx-auto px-4 md:px-8 py-8 space-y-10">
+        <div className="w-full max-w-6xl mx-auto px-4 md:px-8 py-8 space-y-10 relative">
+            {/* Efecto de aurora boreal sutil en el fondo */}
+            <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
+                <div className="absolute top-0 left-1/4 w-96 h-96 bg-gradient-to-br from-violet-500/20 via-fuchsia-500/10 to-transparent rounded-full blur-3xl opacity-50 animate-pulse" />
+                <div className="absolute top-1/4 right-1/4 w-80 h-80 bg-gradient-to-bl from-cyan-500/15 via-blue-500/10 to-transparent rounded-full blur-3xl opacity-40" style={{ animationDelay: '1s' }} />
+                <div className="absolute bottom-0 left-1/3 w-72 h-72 bg-gradient-to-tr from-emerald-500/10 via-teal-500/5 to-transparent rounded-full blur-3xl opacity-30" style={{ animationDelay: '2s' }} />
+            </div>
+
             {/* ── SECTION 1: Welcome + Stats ────────────────────── */}
             <section className="space-y-6">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -484,6 +496,20 @@ export function MorningDashboard({
 
                 {/* Stat Cards */}
                 <TooltipProvider delayDuration={200}>
+                    {authRevoked && (
+                        <div className="mb-6 p-4 rounded-2xl border border-red-500/30 bg-red-500/10 flex flex-col md:flex-row items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <AlertCircle className="w-5 h-5 text-red-500" />
+                                <div>
+                                    <h3 className="text-sm font-bold text-red-500">Sesión Expirada</h3>
+                                    <p className="text-xs text-red-400/80">Tu sesión de YouTube caducó o el acceso fue revocado. Vuelve a conectar tu canal para cargar métricas y oportunidades reales.</p>
+                                </div>
+                            </div>
+                            <Button variant="outline" size="sm" className="border-red-500/50 text-red-500 hover:bg-red-500/20 whitespace-nowrap" onClick={() => onNavigate('integrations')}>
+                                Ir a Integraciones
+                            </Button>
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         {/* Views 7d */}
                         <motion.div

@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 import { crypto } from "https://deno.land/std@0.224.0/crypto/mod.ts";
 import { decodeHex } from "https://deno.land/std@0.224.0/encoding/hex.ts";
 import { getUserApiKey } from '../_shared/api-key-service.ts'
+import { callWithCascade } from '../_shared/ai-cascade.ts'
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -134,47 +135,7 @@ async function searchOutliers(queries: string[], apiKey: string): Promise<Outlie
     return outliers.sort((a, b) => b.growthRatio - a.growthRatio).slice(0, 15);
 }
 
-// --- AI Core: BYOK Support ---
-async function callAI(prompt: string, userApiKey: string | null): Promise<any> {
-    if (userApiKey) {
-        console.log("[ai-content-insights] Using direct user key");
-        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${userApiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { temperature: 0.7, maxOutputTokens: 4096 }
-            })
-        });
-        if (!resp.ok) throw new Error(`User API Key failed: ${await resp.text()}`);
-        const data = await resp.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        return extractAndParseJSON(text);
-    }
-
-    // Fallback: OpenRouter
-    const models = ["google/gemini-flash-1.5", "meta-llama/llama-3.1-8b-instruct:free", "openrouter/auto"];
-    const systemKey = Deno.env.get("GEMINI_API_KEY");
-    if (!systemKey) throw new Error("Missing system API Key");
-
-    for (const model of models) {
-        try {
-            const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${systemKey}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model, messages: [{ role: "user", content: prompt }],
-                    response_format: { type: "json_object" }, temperature: 0.7
-                })
-            });
-            if (!resp.ok) continue;
-            const data = await resp.json();
-            return JSON.parse(data.choices?.[0]?.message?.content || "{}");
-        } catch (e) { console.warn(`Model ${model} failed`, e); }
-    }
-    throw new Error("All AI fallbacks failed");
-}
-
+// --- AI Core: Response Parsing ---
 function extractAndParseJSON(text: string): any {
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
@@ -207,8 +168,11 @@ Deno.serve(async (req) => {
         let identityProfile = identity?.identity_profile;
 
         if (!identityProfile) {
-            const bPrompt = `Crea un perfil de identidad "Mazazo" para este canal: ${userAnalytics.recentVideos.join(', ')}. Devuelve solo JSON: {"tema_principal":"","estilo":"","publico_objetivo":"","formato_dominante":""}`;
-            identityProfile = await callAI(bPrompt, userApiKey);
+            const bPrompt = `Crea un perfil de identidad estratégica para este canal basado en sus videos recientes: ${userAnalytics.recentVideos.join(', ')}. 
+            Identifica el tema principal, el estilo de comunicación, el público objetivo y el formato dominante (mucha atención a si son principalmente YouTube Shorts -busca #shorts- o videos horizontales).
+            Devuelve solo JSON: {"tema_principal":"","estilo":"","publico_objetivo":"","formato_dominante":""}`;
+            const profileRes = await callWithCascade({ prompt: bPrompt, customGeminiKey: userApiKey, jsonMode: true, temperature: 0.7, maxTokens: 4096 });
+            identityProfile = extractAndParseJSON(profileRes.text);
             await supabaseAdmin.from('user_channel_identities').upsert({ user_id: user.id, identity_profile: identityProfile, last_learned_at: new Date().toISOString() });
         }
 
@@ -223,9 +187,69 @@ Deno.serve(async (req) => {
             outliers = await searchOutliers(queries, Deno.env.get("YOUTUBE_API_KEY")!);
         }
 
-        const prompt = `Actúa como estratega Senior para este canal: ${JSON.stringify(identityProfile)}. Métricas: ${JSON.stringify(userAnalytics)}. Outliers: ${JSON.stringify(outliers)}. Devuelve JSON exacto: {"recommendations":[{"niche":"","reasoning":"","confidence":0,"suggestedFormat":"","optimalLength":"","titleSuggestions":[],"hashtagsSuggested":[],"bestTimeToPost":"","retentionStrategy":""}],"checklist":[{"task":"","description":"","priority":"alta","status":"pending"}],"confidence":90}`;
+        // --- MULTI-AGENT PIPELINE ---
+        
+        // AGENT 1: Data Analyst (Analista de Datos)
+        // Objetivo: Digerir las métricas y tendencias para definir la estrategia cruda.
+        const analystPrompt = `Eres un Analista de Datos de YouTube Shorts.
+        Perfil del canal: ${JSON.stringify(identityProfile)}
+        Métricas actuales: ${JSON.stringify(userAnalytics)}
+        Tendencias (Outliers): ${JSON.stringify(outliers)}
+        
+        INSTRUCCIÓN: Escribe un resumen estratégico de máximo 3 párrafos. 
+        Identifica cuál es el principal problema a resolver (ej. retención inicial, falta de vistas) basado en las métricas, y qué temática exacta (de sus pilares: Comida Extrema o Guerreros) debería abordar el próximo video basándote en las tendencias actuales. NO des ideas de guion, solo diagnóstico y dirección.`;
+        
+        const analystRes = await callWithCascade({ prompt: analystPrompt, customGeminiKey: userApiKey, jsonMode: false, temperature: 0.3, maxTokens: 1000 });
+        const diagnosis = analystRes.text;
 
-        const aiResult = await callAI(prompt, userApiKey);
+        // AGENT 2: Hook Specialist (Especialista en Ganchos)
+        // Objetivo: Crear los 3 primeros segundos de forma visceral y magnética.
+        const hookPrompt = `Eres un Especialista en Ganchos (Hooks) para YouTube Shorts.
+        Tu analista te ha dado esta dirección estratégica:
+        "${diagnosis}"
+        
+        INSTRUCCIÓN: Crea 3 conceptos de ganchos EXTREMADAMENTE virales (solo los primeros 3 segundos).
+        Deben pertenecer a "Comida Extrema" o "Guerreros Históricos".
+        Para cada gancho, describe exactamente qué se ve en pantalla (Visual) y qué se escucha (Audio).
+        El objetivo es que sea imposible hacer "swipe away" (deslizar).
+        Devuelve tu respuesta en texto plano estructurado.`;
+
+        const hookRes = await callWithCascade({ prompt: hookPrompt, customGeminiKey: userApiKey, jsonMode: false, temperature: 0.8, maxTokens: 1500 });
+        const hooks = hookRes.text;
+
+        // AGENT 3: Content Strategist (Estratega de Empaquetado - JSON Final)
+        // Objetivo: Tomar los ganchos y empaquetarlos en el formato JSON final esperado por la app.
+        const strategistPrompt = `Eres el Estratega Principal de Contenido.
+        Tu equipo ha desarrollado estos 3 Ganchos virales:
+        "${hooks}"
+        
+        INSTRUCCIÓN: Toma estos ganchos y desarróllalos en 3 propuestas completas de Shorts (15-30 segundos).
+        Desarrolla el guion completo para cada uno basándote en el gancho.
+        
+        Devuelve el resultado ESTRICTAMENTE en este formato JSON:
+        {
+          "recommendations": [
+            {
+              "niche": "Temática elegida",
+              "reasoning": "Por qué funcionará según el analista",
+              "confidence": 95,
+              "suggestedFormat": "Shorts (15-30s)",
+              "optimalLength": "20s",
+              "titleSuggestions": ["Título 1", "Título 2"],
+              "hashtagsSuggested": ["#short", "#viral"],
+              "bestTimeToPost": "18:00",
+              "retentionStrategy": "Gancho Visual: [Qué pasa en los 3s] -> Desarrollo: [Guion rápido de 15s sin respiros]"
+            }
+          ],
+          "checklist": [
+            {"task": "Aplica el gancho 1 de forma visceral", "description": "", "priority": "alta", "status": "pending"},
+            {"task": "Mantén el video por debajo de los 30s", "description": "", "priority": "alta", "status": "pending"}
+          ],
+          "confidence": 95
+        }`;
+
+        const insightRes = await callWithCascade({ prompt: strategistPrompt, customGeminiKey: userApiKey, jsonMode: true, temperature: 0.7, maxTokens: 4096 });
+        const aiResult = extractAndParseJSON(insightRes.text);
 
         await supabaseAdmin.from('ai_content_insights').insert({
             user_id: user.id, channel_stats: userAnalytics, viral_outliers: outliers,

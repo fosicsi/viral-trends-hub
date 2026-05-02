@@ -1,6 +1,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Activity, Users, Layers, HeartPulse, LucideIcon } from "lucide-react";
+import { Activity, Users, Zap, HeartPulse, LucideIcon, ThumbsUp } from "lucide-react";
+import { DiagnosticPattern } from "../../utils/diagnosticEngine";
 
 interface HealthMetricProps {
     label: string;
@@ -41,9 +42,10 @@ import { InfoTooltip } from "../common/InfoTooltip";
 
 interface ChannelHealthIndicatorProps {
     metrics: ChannelHealthMetrics;
+    positivePatterns?: DiagnosticPattern[];
 }
 
-export function ChannelHealthIndicator({ metrics }: ChannelHealthIndicatorProps) {
+export function ChannelHealthIndicator({ metrics, positivePatterns = [] }: ChannelHealthIndicatorProps) {
     if (metrics.loading) {
         return (
             <Card className="h-full">
@@ -73,7 +75,7 @@ export function ChannelHealthIndicator({ metrics }: ChannelHealthIndicatorProps)
                                 <ul className="list-disc pl-3 space-y-1">
                                     <li><strong>Sostenibilidad:</strong> ¿Tus vistas son estables o dependen de un solo viral?</li>
                                     <li><strong>Comunidad:</strong> ¿Tu audiencia comenta y da like activamente?</li>
-                                    <li><strong>Diversidad:</strong> ¿Tienes múltiples fuentes de tráfico o dependes solo de una?</li>
+                                    <li><strong>Tracción Feed:</strong> ¿El algoritmo de Shorts te está empujando proactivamente?</li>
                                 </ul>
                             </div>
                         }
@@ -102,16 +104,33 @@ export function ChannelHealthIndicator({ metrics }: ChannelHealthIndicatorProps)
                         icon={Users}
                     />
                     <HealthMetric
-                        label="Diversidad"
-                        value={metrics.diversity.label}
-                        status={metrics.diversity.score >= 80 ? "healthy" : metrics.diversity.score >= 50 ? "warning" : "risk"}
-                        icon={Layers}
+                        label="Tracción de Feed"
+                        value={metrics.feedTraction.label}
+                        status={metrics.feedTraction.score >= 80 ? "healthy" : metrics.feedTraction.score >= 50 ? "warning" : "risk"}
+                        icon={Zap}
                     />
 
-                    <div className="mt-auto pt-4">
+                    <div className="mt-auto pt-4 space-y-3">
                         <div className="p-3 bg-secondary/50 rounded-lg text-xs text-muted-foreground italic border border-border/50">
                             "{metrics.overall.message}"
                         </div>
+
+                        {positivePatterns.length > 0 && (
+                            <div className="space-y-2">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-1">Patrones Ganadores</p>
+                                <div className="space-y-2">
+                                    {positivePatterns.slice(0, 2).map((pattern, idx) => (
+                                        <div key={idx} className="flex gap-2 p-2 rounded-md bg-green-500/5 border border-green-500/10">
+                                            <ThumbsUp className="w-3 h-3 text-green-600 mt-0.5 shrink-0" />
+                                            <div>
+                                                <p className="text-[11px] font-semibold text-green-700 leading-tight">{pattern.title}</p>
+                                                <p className="text-[10px] text-green-600/80 leading-tight mt-0.5">{pattern.description}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </CardContent>

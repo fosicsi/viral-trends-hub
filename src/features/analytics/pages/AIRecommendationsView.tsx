@@ -193,16 +193,19 @@ export default function AIRecommendationsView() {
                             description={
                                 <>
                                     <p>
-                                        Analizamos miles de videos para encontrar <strong>"Outliers"</strong>: videos virales en canales pequeños, lo que indica un interés genuino en el tema.
+                                        El Estratega IA ahora opera bajo una <strong>Directiva Estricta Shorts-First</strong>. Ya no busca tendencias aleatorias.
                                     </p>
-                                    <div className="pt-2 border-t border-border/50">
-                                        <p className="font-semibold text-foreground mb-1">Tipos de Búsqueda:</p>
+                                    <p className="mt-2">
+                                        Se limitará a iterar sobre tus dos pilares de éxito comprobado: <strong>Comida Extrema</strong> y <strong>Guerreros Históricos</strong>, diseñando ganchos visuales (Hooks) para los primeros 3 segundos.
+                                    </p>
+                                    <div className="pt-2 border-t border-border/50 mt-2">
+                                        <p className="font-semibold text-foreground mb-1">Generación de Ideas:</p>
                                         <ul className="space-y-1 list-disc pl-4">
                                             <li>
-                                                <span className="font-medium text-purple-600">Smart Refresh:</span> Reutiliza datos recientes (Rápido y Gratis).
+                                                <span className="font-medium text-purple-600">Smart Refresh:</span> Crea nuevos guiones para Shorts basados en la base de datos local (Rápido y Gratis).
                                             </li>
                                             <li>
-                                                <span className="font-medium text-purple-600">Investigar Profundo:</span> Busca nuevas tendencias en YouTube (Consume cuota).
+                                                <span className="font-medium text-purple-600">Investigar Profundo:</span> Busca videos virales recientes de tus pilares en YouTube (Consume cuota).
                                             </li>
                                         </ul>
                                     </div>

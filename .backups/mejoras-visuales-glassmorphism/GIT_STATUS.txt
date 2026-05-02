@@ -1,0 +1,133 @@
+ffbf914 feat: complete Outliers finder & fix saved view
+25a6d3c fix: disable gateway jwt verification for image edge functions
+41f617b fix: surface real Gemini error message in Storyboard UI
+c5aebd9 fix: cambiar modelo de Imagen Fast a Imagen 3 standard en Storyboard
+f89b788 feat: completada fase 2 - Storyboard en tiempo real Nano Banana
+ M index.html
+ M package-lock.json
+ M package.json
+ M src/App.css
+ M src/App.tsx
+ M src/components/auth/OnboardingGuard.tsx
+ D src/features/analytics/components/ChartContainer.tsx
+ D src/features/analytics/components/MetricCard.tsx
+ M src/features/analytics/components/business/ChannelHealthIndicator.tsx
+ D src/features/analytics/components/business/GrowthVelocityChart.tsx
+ D src/features/analytics/components/business/ProfitabilityCard.tsx
+ D src/features/analytics/components/business/SessionAnalysisCard.tsx
+ D src/features/analytics/components/common/ExportButton.tsx
+ D src/features/analytics/components/common/TimeRangeSelector.tsx
+ M src/features/analytics/components/diagnostics/ActionPlan.tsx
+ D src/features/analytics/components/diagnostics/ChannelDiagnostics.tsx
+ M src/features/analytics/components/diagnostics/LastVideoPerformance.tsx
+ D src/features/analytics/components/diagnostics/VideoDiagnosisCard.tsx
+ D src/features/analytics/components/key-metrics/CTRCard.tsx
+ D src/features/analytics/components/key-metrics/RetentionChart.tsx
+ D src/features/analytics/components/key-metrics/WatchTimeCard.tsx
+ D src/features/analytics/components/strategy/AudienceDistributionChart.tsx
+ D src/features/analytics/components/strategy/CCNTrendsChart.tsx
+ D src/features/analytics/components/strategy/VideoCCNTable.tsx
+ D src/features/analytics/components/traffic/TrafficDistributionChart.tsx
+ D src/features/analytics/components/traffic/TrafficInsights.tsx
+ D src/features/analytics/components/traffic/TrafficSourceBreakdown.tsx
+ M src/features/analytics/hooks/useChannelHealth.ts
+ M src/features/analytics/hooks/useYouTubeData.ts
+ D src/features/analytics/layout/AnalyticsSidebar.tsx
+ M src/features/analytics/pages/AnalyticsDashboard.tsx
+ D src/features/analytics/pages/AnalyticsSettings.tsx
+ M src/features/analytics/utils/diagnosticEngine.ts
+ M src/features/analytics/utils/lastVideoAnalysis.ts
+ M src/features/analytics/utils/smartAlerts.ts
+ M src/features/outliers/components/VideoCard.tsx
+ M src/features/outliers/components/VideoGrid.tsx
+ M src/features/outliers/hooks/useOutlierSearch.ts
+ M src/features/outliers/pages/OutlierSearchPage.tsx
+ M src/features/studio/components/SectionBasedEditor.tsx
+ D src/features/studio/components/ThumbnailPreview.tsx
+ M src/features/studio/layout/CreatorStudioLayout.tsx
+ M src/features/studio/pages/CreatorStudio.tsx
+ M src/features/viral/MorningDashboard.tsx
+ M src/features/viral/ViralApp.tsx
+ M src/features/viral/components/ViralSearchHeader.tsx
+ M src/features/viral/components/ViralSidebar.tsx
+ M src/features/viral/components/ViralVideoCard.tsx
+ M src/lib/api/integrations.ts
+ M supabase/functions/ai-content-insights/index.ts
+ M supabase/functions/ai-creator-studio/index.ts
+ D supabase/functions/ai-storyboard-generator/index.ts
+ D supabase/functions/ai-thumbnail-generator/index.ts
+ M supabase/functions/ai-viral-script/index.ts
+ M supabase/functions/ai-viral-topics/index.ts
+ M supabase/functions/channel-integration/index.ts
+ M supabase/functions/get-morning-opportunities/index.ts
+?? .backups/
+?? SKILL-1.md
+?? SKILL-2.md
+?? SKILL-3.md
+?? SKILL.md
+?? SKILL6.md
+?? check_integrations.js
+?? check_integrations.ts
+?? check_inter.js
+?? check_refresh.js
+?? check_schema.js
+?? scripts/
+?? supabase/functions/_shared/ai-cascade.ts
+ index.html                                         |  10 +-
+ package-lock.json                                  | 467 --------------
+ package.json                                       |   2 -
+ src/App.css                                        |  14 +
+ src/App.tsx                                        |   2 -
+ src/components/auth/OnboardingGuard.tsx            |  40 +-
+ .../analytics/components/ChartContainer.tsx        |  38 --
+ src/features/analytics/components/MetricCard.tsx   |  57 --
+ .../components/business/ChannelHealthIndicator.tsx |  25 +-
+ .../components/business/GrowthVelocityChart.tsx    |  52 --
+ .../components/business/ProfitabilityCard.tsx      |  67 --
+ .../components/business/SessionAnalysisCard.tsx    |  51 --
+ .../analytics/components/common/ExportButton.tsx   |  43 --
+ .../components/common/TimeRangeSelector.tsx        |  34 -
+ .../components/diagnostics/ActionPlan.tsx          |  53 +-
+ .../components/diagnostics/ChannelDiagnostics.tsx  |  72 ---
+ .../diagnostics/LastVideoPerformance.tsx           |  57 ++
+ .../components/diagnostics/VideoDiagnosisCard.tsx  |  76 ---
+ .../analytics/components/key-metrics/CTRCard.tsx   |  70 ---
+ .../components/key-metrics/RetentionChart.tsx      |  75 ---
+ .../components/key-metrics/WatchTimeCard.tsx       |  53 --
+ .../strategy/AudienceDistributionChart.tsx         |  90 ---
+ .../components/strategy/CCNTrendsChart.tsx         |  59 --
+ .../components/strategy/VideoCCNTable.tsx          |  78 ---
+ .../traffic/TrafficDistributionChart.tsx           |  77 ---
+ .../components/traffic/TrafficInsights.tsx         | 123 ----
+ .../components/traffic/TrafficSourceBreakdown.tsx  |  99 ---
+ src/features/analytics/hooks/useChannelHealth.ts   |  18 +-
+ src/features/analytics/hooks/useYouTubeData.ts     |  23 +-
+ src/features/analytics/layout/AnalyticsSidebar.tsx |  66 --
+ .../analytics/pages/AnalyticsDashboard.tsx         | 512 +++------------
+ src/features/analytics/pages/AnalyticsSettings.tsx | 126 ----
+ src/features/analytics/utils/diagnosticEngine.ts   | 354 ++++-------
+ src/features/analytics/utils/lastVideoAnalysis.ts  |   2 +
+ src/features/analytics/utils/smartAlerts.ts        |   4 +-
+ src/features/outliers/components/VideoCard.tsx     |   2 +-
+ src/features/outliers/components/VideoGrid.tsx     |  54 +-
+ src/features/outliers/hooks/useOutlierSearch.ts    |   3 +
+ src/features/outliers/pages/OutlierSearchPage.tsx  |   3 +-
+ .../studio/components/SectionBasedEditor.tsx       | 277 ++++++---
+ .../studio/components/ThumbnailPreview.tsx         | 226 -------
+ src/features/studio/layout/CreatorStudioLayout.tsx | 188 ++----
+ src/features/studio/pages/CreatorStudio.tsx        | 183 ++++--
+ src/features/viral/MorningDashboard.tsx            |  30 +-
+ src/features/viral/ViralApp.tsx                    | 688 +++------------------
+ .../viral/components/ViralSearchHeader.tsx         | 124 ++--
+ src/features/viral/components/ViralSidebar.tsx     |   7 +-
+ src/features/viral/components/ViralVideoCard.tsx   | 193 ++++--
+ src/lib/api/integrations.ts                        |   4 +
+ supabase/functions/ai-content-insights/index.ts    |  53 +-
+ supabase/functions/ai-creator-studio/index.ts      | 169 ++---
+ .../functions/ai-storyboard-generator/index.ts     |  94 ---
+ supabase/functions/ai-thumbnail-generator/index.ts |  94 ---
+ supabase/functions/ai-viral-script/index.ts        | 123 ++--
+ supabase/functions/ai-viral-topics/index.ts        |  37 +-
+ supabase/functions/channel-integration/index.ts    | 244 ++++++--
+ .../functions/get-morning-opportunities/index.ts   |  13 +-
+ 57 files changed, 1512 insertions(+), 4286 deletions(-)

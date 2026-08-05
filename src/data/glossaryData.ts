@@ -53,6 +53,7 @@ export const glossaryTerms: GlossaryTerm[] = [
     { term: "Heatmap (Mapa de calor)", definition: "Representación visual que muestra las áreas donde los usuarios interactúan más en una página web." },
     { term: "HTML", definition: "Lenguaje estándar para estructurar contenido en la web." },
     { term: "Hyper-Personalization", definition: "Uso de IA y data en tiempo real para adaptar el contenido, productos o mensajes a cada usuario individualmente." },
+    { term: "IDE (Integrated Development Environment)", definition: "Entorno de Desarrollo Integrado. Una aplicación de software que facilita a los programadores el desarrollo de software, combinando edición de código, compilación y depuración en una sola interfaz." },
     { term: "Inbound Marketing", definition: "Estrategia para atraer clientes mediante contenido de valor, en lugar de buscarlos intrusivamente." },
     { term: "Influencer Marketing", definition: "Estrategia basada en la colaboración con personas influyentes para promocionar productos." },
     { term: "JSON (JavaScript Object Notation)", definition: "Formato de texto estándar para representar datos estructurados, común en APIs." },

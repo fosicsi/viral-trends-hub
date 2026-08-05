@@ -63,7 +63,21 @@ export default function CreatorStudio() {
     };
 
     const handleLoadProject = (project: any) => {
-        const script = project.script_content || {};
+        let script = project.script_content || {};
+        if (typeof script === 'string') {
+            try {
+                script = JSON.parse(script);
+            } catch (e) {
+                console.error("Error parsing script_content", e);
+                script = {};
+            }
+        }
+        
+        // Handle double-nesting if it occurred
+        if (script.script_content) {
+            script = script.script_content;
+        }
+
         setCurrentScript(script);
         setView('editor');
     };
@@ -86,6 +100,7 @@ export default function CreatorStudio() {
                             <ArrowLeft className="mr-2 h-4 w-4" /> Volver al Menú
                         </Button>
                         <SectionBasedEditor
+                            key={currentScript?.id || JSON.stringify(currentScript).length || Math.random()}
                             initialScript={currentScript}
                             onSave={handleSaveScript}
                         />

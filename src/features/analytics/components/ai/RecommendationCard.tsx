@@ -17,6 +17,8 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { cn } from "@/lib/utils";
+import { ScriptStudioModal } from "./ScriptStudioModal";
+import { Video } from "lucide-react";
 
 export interface AIRecommendation {
     niche: string;
@@ -47,6 +49,7 @@ interface RecommendationCardProps {
 
 export function RecommendationCard({ recommendation, rank, onSave, onDiscard }: RecommendationCardProps) {
     const [isExpanded, setIsExpanded] = useState(false);
+    const [studioOpen, setStudioOpen] = useState(false);
     const viralScore = recommendation.viralPotentialScore || recommendation.confidence;
 
     const getScoreColor = (score: number) => {
@@ -229,7 +232,7 @@ export function RecommendationCard({ recommendation, rank, onSave, onDiscard }: 
                                 <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Validación de Mercado</h4>
                             </div>
                             <div className="grid gap-2">
-                                {recommendation.outlierExamples.slice(0, 1).map((ex, i) => (
+                                {(recommendation.outlierExamples || []).slice(0, 1).map((ex, i) => (
                                     <a
                                         key={i}
                                         href={ex.url}
@@ -252,9 +255,20 @@ export function RecommendationCard({ recommendation, rank, onSave, onDiscard }: 
 
                     </CardContent>
 
-                    <CardFooter className="px-6 pb-6 pt-0">
+                    <CardFooter className="px-6 pb-6 pt-0 flex flex-col sm:flex-row gap-3">
                         <Button
-                            className="w-full rounded-xl shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 h-11 font-bold tracking-wide"
+                            className="w-full rounded-xl shadow-lg shadow-purple-500/20 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 h-11 font-bold tracking-wide text-white"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setStudioOpen(true);
+                            }}
+                        >
+                            <Video className="w-4 h-4 mr-2" />
+                            Desarrollar Guion Completo
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            className="w-full sm:w-auto rounded-xl h-11 font-bold tracking-wide"
                             onClick={(e) => {
                                 e.stopPropagation();
                                 onSave?.(recommendation);
@@ -266,6 +280,12 @@ export function RecommendationCard({ recommendation, rank, onSave, onDiscard }: 
                     </CardFooter>
                 </div>
             </div>
+
+            <ScriptStudioModal 
+                open={studioOpen} 
+                onOpenChange={setStudioOpen} 
+                recommendation={recommendation} 
+            />
         </Card>
     );
 }

@@ -105,30 +105,49 @@ INSTRUCCIÓN CRÍTICA: Tu guion debe mantener el MISMO TONO y ESTILO que estos v
             }
         }
 
-        // Add trending context if available
+        // Fetch prompt templates from DB if available
         const trendBlock = trendingContext ? `\n${trendingContext}\n` : '';
+        let systemPrompt = '';
+        let userPrompt = '';
 
-        // Build the dynamic prompt based on mode
-        let prompt = '';
+        const templateName = mode === 'refine' ? 'studio_refiner' : 'studio_generator';
+        const { data: template } = await supabaseClient
+            .from('prompt_templates')
+            .select('system_prompt, user_prompt_template')
+            .eq('name', templateName)
+            .single();
+
         if (mode === 'refine') {
-            prompt = `Actualmente eres un Estratega SEO y Guionista de YouTube. 
-Analiza este BORRADOR de guion y genera:
+            if (template) {
+                systemPrompt = template.system_prompt;
+                userPrompt = template.user_prompt_template.replace('{{SCRIPT_DRAFT}}', JSON.stringify(scriptDraft));
+            } else {
+                // Fallback
+                systemPrompt = `Actualmente eres un Estratega SEO y Guionista de YouTube.
+Analiza el BORRADOR de guion provisto por el usuario y genera:
 1. 3 opciones de TÍTULOS virales basados en el contenido.
 2. 8 etiquetas SEO relevantes.
-
-BORRADOR:
-${JSON.stringify(scriptDraft)}
 
 Devuelve EXACTAMENTE este JSON:
 {
     "title_options": ["Opción viral 1", "Opción viral 2", "Opción viral 3"],
     "seo_tags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8"]
 }`;
+                userPrompt = `BORRADOR:\n${JSON.stringify(scriptDraft)}`;
+            }
         } else {
-            prompt = `Eres un guionista profesional de YouTube experto en retención y conversión.
-${channelContext}
-${trendBlock}
-TAREA: Generá un guion completo para un video sobre: "${topic}"
+            const formatString = format === 'short' ? 'YouTube Short (ritmo ultra rápido, vertical 9:16)' : 'Video Largo (estructura narrativa completa, 16:9)';
+            
+            if (template) {
+                systemPrompt = template.system_prompt;
+                userPrompt = template.user_prompt_template
+                    .replace('{{CHANNEL_CONTEXT}}', channelContext)
+                    .replace('{{TRENDING_CONTEXT}}', trendBlock)
+                    .replace('{{TOPIC}}', topic)
+                    .replace('{{FORMAT}}', formatString);
+            } else {
+                // Fallback
+                systemPrompt = `Eres un guionista profesional de YouTube experto en retención y conversión.
 
 ESTRUCTURA OBLIGATORIA (Framework SKILL-3):
 1. **Hook** (0-5s): Captura inmediata con pregunta, estadística o afirmación audaz.
@@ -141,7 +160,6 @@ REGLAS DE ESCRITURA:
 - Escribí PARA EL OÍDO: frases cortas, lenguaje conversacional y directo.
 - Sé ESPECÍFICO. Evitá generalidades como "lo que nadie te cuenta".
 - Incluí indicaciones detalladas de B-roll, superposiciones de texto y animaciones.
-- Formato: ${format === 'short' ? 'YouTube Short (ritmo ultra rápido, vertical 9:16)' : 'Video Largo (estructura narrativa completa, 16:9)'}
 
 Devolvé EXACTAMENTE este JSON:
 {
@@ -155,11 +173,14 @@ Devolvé EXACTAMENTE este JSON:
     ],
     "seo_tags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8"]
 }`;
+                userPrompt = `${channelContext}\n${trendBlock}\nTAREA: Generá un guion completo para un video sobre: "${topic}"\n\nFormato esperado del guion: ${formatString}`;
+            }
         }
 
         // Call AI cascade with BYOK support
         const { text, provider } = await callWithCascade({
-            prompt: prompt,
+            systemPrompt: systemPrompt,
+            prompt: userPrompt,
             jsonMode: true,
             temperature: 0.7,
             maxTokens: 2048,

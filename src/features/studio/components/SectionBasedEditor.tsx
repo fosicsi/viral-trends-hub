@@ -107,23 +107,25 @@ export function SectionBasedEditor({ initialScript, onSave }: SectionBasedEditor
     const [selectedTitleIdx, setSelectedTitleIdx] = useState(0);
     const [sections, setSections] = useState<ScriptSection[]>(() => parseIntellitubeScript(initialScript).sections);
     const [seoTags, setSeoTags] = useState<string[]>(() => parseIntellitubeScript(initialScript).seoTags);
+    const [shortDuration, setShortDuration] = useState(60);
     const [isRefining, setIsRefining] = useState(false);
 
     const updateSectionTimes = (targetFormat: 'short' | 'long', targetDur: number) => {
         setSections(current => current.map(s => {
+            const fmtSec = (s: number) => {
+                const min = Math.floor(s / 60);
+                const sec = Math.floor(s % 60);
+                return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+            };
             if (targetFormat === 'short') {
-                if (s.id.includes('hook')) return { ...s, time: '00:00-00:05' };
-                if (s.id.includes('problem')) return { ...s, time: '00:05-00:15' };
-                if (s.id.includes('solution')) return { ...s, time: '00:15-00:45' };
-                if (s.id.includes('proof')) return { ...s, time: '00:45-00:55' };
-                if (s.id.includes('cta')) return { ...s, time: '00:55-01:00' };
+                const totalSec = targetDur;
+                if (s.id.includes('hook')) return { ...s, time: `${fmtSec(0)}-${fmtSec(Math.max(1, totalSec * 0.1))}` };
+                if (s.id.includes('problem')) return { ...s, time: `${fmtSec(Math.max(1, totalSec * 0.1))}-${fmtSec(totalSec * 0.3)}` };
+                if (s.id.includes('solution')) return { ...s, time: `${fmtSec(totalSec * 0.3)}-${fmtSec(totalSec * 0.75)}` };
+                if (s.id.includes('proof')) return { ...s, time: `${fmtSec(totalSec * 0.75)}-${fmtSec(totalSec * 0.9)}` };
+                if (s.id.includes('cta')) return { ...s, time: `${fmtSec(totalSec * 0.9)}-${fmtSec(totalSec)}` };
             } else {
                 const totalSec = targetDur * 60;
-                const fmtSec = (s: number) => {
-                    const min = Math.floor(s / 60);
-                    const sec = Math.floor(s % 60);
-                    return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
-                };
                 // Simplified 5-step timing for Long
                 if (s.id.includes('hook')) return { ...s, time: `${fmtSec(0)}-${fmtSec(10)}` };
                 if (s.id.includes('problem')) return { ...s, time: `${fmtSec(10)}-${fmtSec(totalSec * 0.15)}` };
@@ -159,12 +161,17 @@ export function SectionBasedEditor({ initialScript, onSave }: SectionBasedEditor
 
     const handleFormatChange = (newFormat: 'short' | 'long') => {
         setFormat(newFormat);
-        updateSectionTimes(newFormat, duration);
+        updateSectionTimes(newFormat, newFormat === 'short' ? shortDuration : duration);
     };
 
     const handleDurationChange = (newVal: number) => {
-        setDuration(newVal);
-        updateSectionTimes(format, newVal);
+        if (format === 'short') {
+            setShortDuration(newVal);
+            updateSectionTimes(format, newVal);
+        } else {
+            setDuration(newVal);
+            updateSectionTimes(format, newVal);
+        }
     };
 
     const handleVisualChange = (id: string, value: string) => {
@@ -294,9 +301,17 @@ export function SectionBasedEditor({ initialScript, onSave }: SectionBasedEditor
                         {isRefining ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
                         Sugerir SEO
                     </Button>
-                    <Button variant="outline" size="sm" onClick={copyToClipboard}>
+                    <Button variant="outline" size="sm" onClick={() => {
+                        const lines = sections.map(s => s.audio).filter(Boolean);
+                        navigator.clipboard.writeText(lines.join('\n\n'));
+                        toast({ title: "Locución copiada ✅", description: "Texto listo para el teleprompter" });
+                    }} title="Copiar solo el texto para leer">
+                        <Mic className="w-4 h-4 mr-2" />
+                        Copiar Locución
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={copyToClipboard} title="Copiar guion completo con visuales">
                         <Copy className="w-4 h-4 mr-2" />
-                        Copiar
+                        Copiar Todo
                     </Button>
                     <Button size="sm" onClick={handleSave}>
                         <Save className="w-4 h-4 mr-2" />
@@ -326,7 +341,7 @@ export function SectionBasedEditor({ initialScript, onSave }: SectionBasedEditor
                         </RadioGroup>
                     </div>
 
-                    {format === 'long' && (
+                    {format === 'long' ? (
                         <div className="flex-1 min-w-[200px] space-y-2">
                             <div className="flex justify-between">
                                 <Label className="text-xs font-semibold text-muted-foreground">Duración Estimada</Label>
@@ -337,6 +352,20 @@ export function SectionBasedEditor({ initialScript, onSave }: SectionBasedEditor
                                 min={1}
                                 max={20}
                                 step={1}
+                                onValueChange={(vals) => handleDurationChange(vals[0])}
+                            />
+                        </div>
+                    ) : (
+                        <div className="flex-1 min-w-[200px] space-y-2">
+                            <div className="flex justify-between">
+                                <Label className="text-xs font-semibold text-muted-foreground">Duración Estimada</Label>
+                                <span className="text-xs font-bold text-primary">{shortDuration} segundos</span>
+                            </div>
+                            <Slider
+                                value={[shortDuration]}
+                                min={15}
+                                max={60}
+                                step={5}
                                 onValueChange={(vals) => handleDurationChange(vals[0])}
                             />
                         </div>

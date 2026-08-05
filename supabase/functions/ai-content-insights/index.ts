@@ -64,7 +64,10 @@ async function getUserAnalytics(userId: string, supabaseAdmin: any): Promise<Use
     const description = stats.description || "";
     const title = stats.title || "";
     const combinedText = `${title} ${description}`.toLowerCase();
-    const nicheKeywords = combinedText.replace(/[^\w\sáéíóúñ]/g, ' ').split(/\s+/).filter((w: string) => w.length > 5).slice(0, 4);
+    const extractedKeywords = combinedText.replace(/[^\w\sáéíóúñ]/g, ' ').split(/\s+/).filter((w: string) => w.length > 5).slice(0, 4);
+    // Channel DNA: always include core niche terms for @magicaescocia
+    const coreNicheTerms = ["scotland history mystery", "scottish warriors battles", "scotland legends dark secrets", "scottish castles haunted", "highland clans medieval"];
+    const nicheKeywords = extractedKeywords.length > 0 ? extractedKeywords : coreNicheTerms.slice(0, 3);
 
     const topTrafficSources = (traffic.rows || []).map((r: any) => r[0]).slice(0, 3);
     let totalPct = 0; let totalWatchTime = 0; let totalSubsGained = 0; let count = 0;
@@ -183,7 +186,17 @@ Deno.serve(async (req) => {
         }
 
         if (outliers.length === 0) {
-            const queries = userAnalytics.nicheKeywords.length > 0 ? userAnalytics.nicheKeywords : ["viral content"];
+            // Channel DNA: search queries anchored in Scottish history niche
+            const channelDNAQueries = [
+                "scotland history secrets mysteries shorts",
+                "scottish warriors battles medieval shorts",
+                "haunted castles scotland legends shorts",
+                "celtic mythology scotland dark history",
+                "scottish clans highland battles"
+            ];
+            const queries = userAnalytics.nicheKeywords.length > 0 
+                ? [...userAnalytics.nicheKeywords.slice(0, 2), ...channelDNAQueries.slice(0, 2)] 
+                : channelDNAQueries.slice(0, 3);
             outliers = await searchOutliers(queries, Deno.env.get("YOUTUBE_API_KEY")!);
         }
 
@@ -191,13 +204,17 @@ Deno.serve(async (req) => {
         
         // AGENT 1: Data Analyst (Analista de Datos)
         // Objetivo: Digerir las métricas y tendencias para definir la estrategia cruda.
-        const analystPrompt = `Eres un Analista de Datos de YouTube Shorts.
+        const analystPrompt = `Eres un Analista de Datos de YouTube Shorts especializado en el canal @magicaescocia.
+        El canal trata sobre: Historia de Escocia — misterio, heroísmo, datos desconocidos, lo oscuro y épico. Guerreros, clanes, castillos, leyendas celtas, lo macabro y fascinante.
         Perfil del canal: ${JSON.stringify(identityProfile)}
         Métricas actuales: ${JSON.stringify(userAnalytics)}
-        Tendencias (Outliers): ${JSON.stringify(outliers)}
+        Tendencias virales actuales en el nicho (Outliers): ${JSON.stringify(outliers)}
         
-        INSTRUCCIÓN: Escribe un resumen estratégico de máximo 3 párrafos. 
-        Identifica cuál es el principal problema a resolver (ej. retención inicial, falta de vistas) basado en las métricas, y qué temática exacta (de sus pilares: Comida Extrema o Guerreros) debería abordar el próximo video basándote en las tendencias actuales. NO des ideas de guion, solo diagnóstico y dirección.`;
+        INSTRUCCIÓN: Escribe un resumen estratégico de máximo 3 párrafos.
+        Identifica cuál es el principal problema a resolver (ej. retención inicial, falta de vistas) basado en las métricas.
+        Luego, basándote en los outliers virales, sugiere qué TEMÁTICA EXACTA de Escocia debería abordar el próximo Short.
+        Los pilares temáticos del canal son: (1) Resiliencia y supervivencia escocesa, (2) Lo macabro y fascinante, (3) Misticismo y folclore celta, (4) Identidad global escocesa.
+        NO des ideas de guion, solo diagnóstico y dirección temática.`;
         
         const analystRes = await callWithCascade({ prompt: analystPrompt, customGeminiKey: userApiKey, jsonMode: false, temperature: 0.3, maxTokens: 1000 });
         const diagnosis = analystRes.text;
@@ -250,6 +267,14 @@ Deno.serve(async (req) => {
 
         const insightRes = await callWithCascade({ prompt: strategistPrompt, customGeminiKey: userApiKey, jsonMode: true, temperature: 0.7, maxTokens: 4096 });
         const aiResult = extractAndParseJSON(insightRes.text);
+
+        // FIX: Inject the outliers into each recommendation to avoid frontend crashes
+        // The frontend expects recommendation.outlierExamples to be an array
+        if (aiResult.recommendations && Array.isArray(aiResult.recommendations)) {
+            aiResult.recommendations.forEach((rec: any) => {
+                rec.outlierExamples = outliers.slice(0, 3);
+            });
+        }
 
         await supabaseAdmin.from('ai_content_insights').insert({
             user_id: user.id, channel_stats: userAnalytics, viral_outliers: outliers,

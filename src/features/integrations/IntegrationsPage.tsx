@@ -3,7 +3,9 @@ import { Integration } from "@/features/integrations/types";
 import { integrationsApi } from "@/lib/api/integrations";
 import { IntegrationCard } from "./components/IntegrationCard";
 import { GeminiBYOKForm } from "./components/GeminiBYOKForm";
-import { Chrome } from "lucide-react";
+import { Chrome, ArrowLeft } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 export default function IntegrationsPage() {
     const [integrations, setIntegrations] = useState<Integration[]>([]);
@@ -26,6 +28,15 @@ export default function IntegrationsPage() {
 
     return (
         <div className="container mx-auto p-6 space-y-8">
+            <div className="mb-4">
+                <Button variant="ghost" asChild className="pl-0 text-muted-foreground hover:text-foreground">
+                    <Link to="/">
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Volver a la App
+                    </Link>
+                </Button>
+            </div>
+            
             <div className="flex flex-col gap-1">
                 <h1 className="text-4xl font-black tracking-tight bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
                     Integraciones

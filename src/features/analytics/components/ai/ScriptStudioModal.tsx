@@ -124,8 +124,8 @@ export function ScriptStudioModal({ open, onOpenChange, recommendation }: Script
                             </Button>
                         </div>
                     ) : result ? (
-                        <Tabs defaultValue="script" className="flex-1 flex flex-col">
-                            <div className="px-6 pt-4 bg-background/30">
+                        <Tabs defaultValue="script" className="flex-1 flex flex-col min-h-0">
+                            <div className="px-6 pt-4 bg-background/30 shrink-0">
                                 <TabsList className="grid w-full grid-cols-4 lg:w-[500px]">
                                     <TabsTrigger value="script">Tabla Técnica</TabsTrigger>
                                     <TabsTrigger value="clean">Libreto Limpio</TabsTrigger>
@@ -134,7 +134,7 @@ export function ScriptStudioModal({ open, onOpenChange, recommendation }: Script
                                 </TabsList>
                             </div>
 
-                            <ScrollArea className="flex-1 p-6">
+                            <div className="flex-1 overflow-y-auto p-6">
                                 {/* --- Tab: Guion Técnico --- */}
                                 <TabsContent value="script" className="m-0 space-y-4">
                                     <div className="flex items-center justify-between mb-2">
@@ -239,7 +239,7 @@ export function ScriptStudioModal({ open, onOpenChange, recommendation }: Script
                                         ))}
                                     </div>
                                 </TabsContent>
-                            </ScrollArea>
+                            </div>
                         </Tabs>
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center p-8 text-muted-foreground">

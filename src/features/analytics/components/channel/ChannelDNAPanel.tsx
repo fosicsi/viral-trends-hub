@@ -95,7 +95,7 @@ export function ChannelDNAPanel() {
         .upsert({
           user_id: session.user.id,
           identity_profile: dna,
-          last_learned_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         });
 
       if (error) throw error;
@@ -103,7 +103,9 @@ export function ChannelDNAPanel() {
       setIsConfigured(!!dna.canal);
       toast.success('¡ADN del canal guardado correctamente!');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error desconocido';
+      const sb = err as { message?: string; details?: string; hint?: string };
+      const message = sb?.message || sb?.details || (err instanceof Error ? err.message : 'Error desconocido');
+      console.error('saveDNA error:', err);
       toast.error(`Error al guardar: ${message}`);
     } finally {
       setSaving(false);

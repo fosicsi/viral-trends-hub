@@ -166,7 +166,7 @@ Deno.serve(async (req) => {
         }
 
         const ch = channelData.items[0];
-        const uploadsPlaylistId = ch.contentDetails?.relatedPlaylists?.uploads;
+        const uploadsPlaylistId = ch.contentDetails?.relatedPlaylists?.uploads || (ch.id?.startsWith("UC") ? "UU" + ch.id.slice(2) : null);
 
         // 4. UPSERT youtube_channels
         console.log(`[kickstart] Channel: ${ch.snippet.title} (${ch.id})`);
@@ -219,12 +219,13 @@ Deno.serve(async (req) => {
         );
 
         if (!playlistRes.ok) {
-            console.warn("[kickstart] Playlist fetch failed:", playlistRes.status);
+            const errText = await playlistRes.text();
+            console.warn("[kickstart] Playlist fetch failed:", playlistRes.status, errText);
             return new Response(JSON.stringify({
-                success: true,
+                success: false,
                 channel: { title: ch.snippet.title, subs: ch.statistics.subscriberCount },
                 videos: 0,
-                message: "Canal guardado. Error al traer videos, reintentá más tarde."
+                error: `Error de YouTube API (${playlistRes.status}): ${errText.slice(0, 120)}`
             }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 

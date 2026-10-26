@@ -28,12 +28,12 @@ interface ShortVideo {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function parseDurationSeconds(iso: string): number {
-  if (!iso) return 999;
+  if (!iso) return 30; // default to 30s so it is included as Short
   const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-  if (!match) return 999;
-  const h = parseInt(match[1] || '0');
-  const m = parseInt(match[2] || '0');
-  const s = parseInt(match[3] || '0');
+  if (!match) return 30;
+  const h = parseInt(match[1] || '0', 10);
+  const m = parseInt(match[2] || '0', 10);
+  const s = parseInt(match[3] || '0', 10);
   return h * 3600 + m * 60 + s;
 }
 
@@ -71,32 +71,46 @@ Deno.serve(async (req) => {
     const userApiKey = await getUserApiKey(supabaseAdmin, user.id, 'gemini');
 
     // 1. Get channel info
-    const { data: channelRow } = await supabaseAdmin
+    const { data: channelRow, error: chError } = await supabaseAdmin
       .from('youtube_channels')
-      .select('id, subscriber_count, title')
+      .select('id, subscriber_count, channel_title, youtube_channel_id')
       .eq('user_id', user.id)
+      .order('updated_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
-    // 2. Read video_metadata JOIN video_metrics
-    let query = supabaseAdmin
-      .from('video_metadata')
-      .select('id, title, duration, video_metrics(view_count)');
-
-    if (channelRow?.id) {
-      query = query.eq('channel_id', channelRow.id);
-    } else {
-      // Fallback: filter by user if no channel row
-      query = query.eq('user_id', user.id);
+    if (chError) {
+      console.error('[analyze-own-shorts] Error fetching channel:', chError);
     }
 
-    const { data: rawVideos } = await query.limit(200);
+    if (!channelRow?.id) {
+      return new Response(
+        JSON.stringify({
+          noData: true,
+          message:
+            'No se encontró ningún canal de YouTube conectado a tu cuenta. Conéctalo en Integraciones.',
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // 2. Read video_metadata JOIN video_metrics
+    const { data: rawVideos, error: vidError } = await supabaseAdmin
+      .from('video_metadata')
+      .select('id, title, duration, video_metrics(view_count, recorded_at)')
+      .eq('channel_id', channelRow.id)
+      .order('published_at', { ascending: false })
+      .limit(200);
+
+    if (vidError) {
+      console.error('[analyze-own-shorts] Error fetching videos:', vidError);
+    }
 
     if (!rawVideos || rawVideos.length === 0) {
       return new Response(
         JSON.stringify({
           noData: true,
-          message:
-            'No se encontraron videos en la base de datos. Primero sincroniza tu canal en Integraciones.',
+          message: `El canal "${channelRow.channel_title || 'YouTube'}" está conectado pero aún no tiene videos en la base de datos. Pulsa 'Sincronizar Videos Ahora'.`,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
@@ -105,28 +119,40 @@ Deno.serve(async (req) => {
     const subs = Number(channelRow?.subscriber_count || 1);
 
     // 3. Filter to Shorts (< 60 s) and compute viralFactor
-    const shorts: ShortVideo[] = (rawVideos as VideoRecord[])
+    let shorts: ShortVideo[] = (rawVideos as VideoRecord[])
       .filter((v) => {
-        if (!v.duration) return true; // include if no duration data
-        return parseDurationSeconds(v.duration) < 60;
+        if (!v.duration) return true;
+        return parseDurationSeconds(v.duration) <= 60;
       })
       .map((v) => {
-        const views =
-          Number(
-            Array.isArray(v.video_metrics) && v.video_metrics.length > 0
-              ? v.video_metrics[0]?.view_count
-              : v.views ?? 0,
-          ) || 0;
+        const metricsList = Array.isArray(v.video_metrics) ? v.video_metrics : [];
+        const latestMetric = metricsList.length > 0
+          ? [...metricsList].sort((a: any, b: any) => new Date(b.recorded_at || 0).getTime() - new Date(a.recorded_at || 0).getTime())[0]
+          : null;
+        const views = Number(latestMetric?.view_count ?? (v as any).views ?? 0);
         const viralFactor = views / Math.max(subs * 0.1, 100);
         return { title: v.title || 'Sin título', views, viralFactor };
       });
+
+    // If no videos are <= 60s, use all videos rather than failing
+    if (shorts.length === 0) {
+      shorts = (rawVideos as VideoRecord[]).map((v) => {
+        const metricsList = Array.isArray(v.video_metrics) ? v.video_metrics : [];
+        const latestMetric = metricsList.length > 0
+          ? [...metricsList].sort((a: any, b: any) => new Date(b.recorded_at || 0).getTime() - new Date(a.recorded_at || 0).getTime())[0]
+          : null;
+        const views = Number(latestMetric?.view_count ?? (v as any).views ?? 0);
+        const viralFactor = views / Math.max(subs * 0.1, 100);
+        return { title: v.title || 'Sin título', views, viralFactor };
+      });
+    }
 
     if (shorts.length === 0) {
       return new Response(
         JSON.stringify({
           noData: true,
           message:
-            'No se encontraron Shorts (videos < 60 s) en tu base de datos. Sincroniza tu canal primero.',
+            'No se encontraron videos disponibles para analizar. Sincroniza tu canal primero.',
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );

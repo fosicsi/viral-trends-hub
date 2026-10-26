@@ -10,7 +10,9 @@ import {
   User,
   LayoutDashboard,
   Clapperboard,
-  Target
+  Target,
+  Key,
+  Plug
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -152,17 +154,55 @@ export function ViralSidebar({
             />
             <span className="text-[10px] font-bold tracking-wide">Analytics</span>
           </button>
+
+          <button
+            onClick={() => navigate('/integrations')}
+            className={cn(
+              "group flex w-full flex-col items-center justify-center gap-1 rounded-2xl p-3 transition-all duration-300",
+              location.pathname.startsWith('/integrations')
+                ? "bg-primary/10 text-primary shadow-glow-sm"
+                : "text-muted-foreground hover:bg-surface hover:text-foreground"
+            )}
+            title="Integraciones y Conexiones"
+          >
+            <Plug
+              className={cn(
+                "h-6 w-6 transition-transform duration-300 group-hover:scale-110",
+                location.pathname.startsWith('/integrations') ? "text-primary" : "text-muted-foreground"
+              )}
+              strokeWidth={location.pathname.startsWith('/integrations') ? 2.5 : 2}
+            />
+            <span className="text-[10px] font-bold tracking-wide">Integración</span>
+          </button>
         </nav>
       </div>
 
       {/* Bottom: User, Settings & Theme */}
-      <div className="flex flex-col gap-4 items-center mb-2">
+      <div className="flex flex-col gap-3 items-center mb-2 w-full">
 
         {/* Bottom Utils */}
-        <div className="flex flex-col gap-2 w-full px-2">
+        <div className="flex flex-col gap-1 w-full px-2">
           <NavItem id="glossary" icon={HelpCircle} label="Glosario" />
+          <button
+            onClick={() => navigate('/profile')}
+            className={cn(
+              "group flex w-full flex-col items-center justify-center gap-1 rounded-2xl p-3 transition-all duration-300",
+              location.pathname.startsWith('/profile')
+                ? "bg-primary/10 text-primary shadow-glow-sm"
+                : "text-muted-foreground hover:bg-surface hover:text-foreground"
+            )}
+            title="Mi Perfil"
+          >
+            <User
+              className={cn(
+                "h-6 w-6 transition-transform duration-300 group-hover:scale-110",
+                location.pathname.startsWith('/profile') ? "text-primary" : "text-muted-foreground"
+              )}
+              strokeWidth={location.pathname.startsWith('/profile') ? 2.5 : 2}
+            />
+            <span className="text-[10px] font-bold tracking-wide">Perfil</span>
+          </button>
         </div>
-
 
         {/* Interruptor de Tema */}
         <button

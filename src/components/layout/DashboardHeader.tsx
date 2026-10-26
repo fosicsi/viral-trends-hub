@@ -1,4 +1,4 @@
-import { Bell, Search, Menu, LogOut, User, Key, Sun, Moon, HelpCircle, Wifi, WifiOff, ArrowLeft } from "lucide-react";
+import { Bell, Search, Menu, LogOut, User, Key, Sun, Moon, HelpCircle, Wifi, WifiOff, ArrowLeft, Plug } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -75,7 +75,18 @@ export function DashboardHeader({
                 )}
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate('/integrations')}
+                    className="flex items-center gap-1.5 text-xs font-semibold rounded-xl border-border/80 hover:bg-primary/5 hover:border-primary/40 hover:text-primary transition-all"
+                    title="Conectar y sincronizar YouTube y motores IA"
+                >
+                    <Plug className="w-3.5 h-3.5 text-primary" />
+                    <span>Integraciones</span>
+                </Button>
+
                 <form className="hidden md:block md:w-64 lg:w-80">
                     <div className="relative">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />

@@ -96,26 +96,29 @@ Deno.serve(async (req) => {
 
     try {
         // Auth: get user from token
-        const authHeader = req.headers.get('Authorization') || '';
-        const supabaseClient = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-            { global: { headers: { Authorization: authHeader } } }
-        );
-
-        const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-        if (authError || !user) {
-            return new Response(JSON.stringify({ error: "Not authenticated", code: 401 }), {
+        const authHeader = req.headers.get('Authorization') || req.headers.get('authorization') || '';
+        if (!authHeader) {
+            return new Response(JSON.stringify({ error: "Missing Authorization header", code: 401 }), {
                 status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
         }
 
-        console.log(`[kickstart] User: ${user.id}`);
+        const token = authHeader.replace(/^Bearer\s+/i, '');
 
         const supabaseAdmin = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         );
+
+        const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+        if (authError || !user) {
+            console.error("[kickstart] Auth error:", authError);
+            return new Response(JSON.stringify({ error: `Not authenticated: ${authError?.message || 'Invalid token'}`, code: 401 }), {
+                status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+
+        console.log(`[kickstart] User: ${user.id}`);
 
         const encryptionKey = Deno.env.get("OAUTH_ENCRYPTION_KEY") || "default-insecure-key";
 

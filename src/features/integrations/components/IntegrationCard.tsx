@@ -68,25 +68,29 @@ export function IntegrationCard({ platform, title, description, icon, integratio
         try {
             setSyncing(true);
             setSyncResult(null);
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) throw new Error('No session');
-            const res = await fetch(
-                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/youtube-analytics-collector`,
-                {
-                    method: 'POST',
-                    headers: {
-                        Authorization: `Bearer ${session.access_token}`,
-                        'Content-Type': 'application/json',
-                        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-                    },
-                }
-            );
-            const data = await res.json();
-            if (!res.ok || data.error) throw new Error(data.error || data.message || `Error ${res.status}`);
+
+            // Use supabase.functions.invoke which automatically manages auth tokens and headers
+            const { data, error } = await supabase.functions.invoke('youtube-analytics-collector');
+
+            if (error) {
+                let errorMsg = error.message;
+                try {
+                    const ctx = await (error as any).context?.json();
+                    if (ctx?.error) errorMsg = ctx.error;
+                } catch {}
+                throw new Error(errorMsg);
+            }
+
+            if (data?.error) {
+                throw new Error(data.error || data.message || "Error al sincronizar");
+            }
+
             setSyncResult({ videos: data.videos, channel: data.channel?.title });
             toast.success(`¡Sincronizado! ${data.videos} videos guardados de "${data.channel?.title}"`);
+            onStatusChange();
         } catch (err: any) {
-            toast.error(`Error al sincronizar: ${err.message}`);
+            console.error("Sync error:", err);
+            toast.error(`Error al sincronizar: ${err.message || 'Error desconocido'}`);
         } finally {
             setSyncing(false);
         }

@@ -12,7 +12,10 @@ import {
   CalendarCheck,
   CheckCircle2,
   AlertTriangle,
+  DatabaseZap,
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -86,9 +89,11 @@ function VideoRow({ video, rank }: { video: ShortVideo; rank: number }) {
 // ── Main Component ─────────────────────────────────────────────────────────
 
 export function OwnShortsAnalysis() {
+  const navigate = useNavigate();
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const runAnalysis = useCallback(async () => {
     setLoading(true);
@@ -126,6 +131,28 @@ export function OwnShortsAnalysis() {
     runAnalysis();
   }, [runAnalysis]);
 
+  const handleDirectSync = async () => {
+    setSyncing(true);
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('youtube-analytics-collector');
+      if (invokeError) {
+        let msg = invokeError.message;
+        try {
+          const ctx = await (invokeError as any).context?.json();
+          if (ctx?.error) msg = ctx.error;
+        } catch {}
+        throw new Error(msg);
+      }
+      if (data?.error) throw new Error(data.error || data.message);
+      toast.success(`¡Sincronizado! ${data.videos || 0} videos guardados.`);
+      await runAnalysis();
+    } catch (e: any) {
+      toast.error(`Error al sincronizar: ${e.message || 'Error desconocido'}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   // ── States ───────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -159,13 +186,42 @@ export function OwnShortsAnalysis() {
   if (!result || result.noData) {
     return (
       <Card>
-        <CardContent className="flex flex-col items-center justify-center py-12 gap-3 text-center">
-          <TrendingUp className="w-10 h-10 text-muted-foreground/50" />
-          <p className="font-medium">Sin datos disponibles</p>
-          <p className="text-sm text-muted-foreground max-w-xs">
-            {result?.message ||
-              'Primero sincroniza tu canal en Integraciones para que tus videos aparezcan aquí.'}
-          </p>
+        <CardContent className="flex flex-col items-center justify-center py-12 gap-4 text-center">
+          <div className="p-3 rounded-full bg-primary/10 text-primary">
+            <TrendingUp className="w-8 h-8" />
+          </div>
+          <div className="space-y-1">
+            <p className="font-bold text-lg">Sin videos sincronizados</p>
+            <p className="text-sm text-muted-foreground max-w-md">
+              {result?.message ||
+                'Importa los videos de tu canal de YouTube para que el agente IA los analice y detecte tu fórmula ganadora.'}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <Button
+              onClick={handleDirectSync}
+              disabled={syncing}
+              className="font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md"
+            >
+              {syncing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Sincronizando videos de YouTube...
+                </>
+              ) : (
+                <>
+                  <DatabaseZap className="w-4 h-4 mr-2" />
+                  Sincronizar Videos Ahora
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => navigate('/integrations')}
+            >
+              Ver Integraciones
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );

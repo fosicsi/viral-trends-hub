@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Loader2, Copy, Check, Video, Search, Image as ImageIcon, FileText } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Copy, Check, Video, Search, Image as ImageIcon, FileText, Sparkles, RotateCcw, Repeat, Clock, Flame } from "lucide-react";
 import { AIRecommendation } from "./RecommendationCard";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -27,7 +27,7 @@ export function ScriptStudioModal({ open, onOpenChange, recommendation }: Script
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
-    async function generateProduction(rec: AIRecommendation) {
+    async function generateProduction(rec: AIRecommendation, customOptions?: { customHookType?: string }) {
         setLoading(true);
         setResult(null);
         setError(false);
@@ -42,7 +42,10 @@ export function ScriptStudioModal({ open, onOpenChange, recommendation }: Script
                     "Authorization": `Bearer ${session.access_token}`,
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({ recommendation: rec })
+                body: JSON.stringify({ 
+                    recommendation: rec,
+                    customHookType: customOptions?.customHookType
+                })
             });
 
             if (!response.ok) {
@@ -89,6 +92,8 @@ export function ScriptStudioModal({ open, onOpenChange, recommendation }: Script
 
     const scriptSections = Array.isArray(result?.scriptSections) ? result.scriptSections : [];
     const cleanScript = result?.cleanScript || "";
+    const loopConnection = result?.loopConnection || "";
+    const metadata = result?.metadata || {};
     const seoTitle = result?.seo?.title || "";
     const seoDescription = result?.seo?.description || "";
     const seoHashtags = Array.isArray(result?.seo?.hashtags) ? result.seo.hashtags : [];
@@ -96,49 +101,94 @@ export function ScriptStudioModal({ open, onOpenChange, recommendation }: Script
     const nanobananPrompts = Array.isArray(result?.prompts?.nanobanana) ? result.prompts.nanobanana : [];
     const googleFlowPrompts = Array.isArray(result?.prompts?.google_flow) ? result.prompts.google_flow : [];
 
+    const wordCount = cleanScript.trim() ? cleanScript.trim().split(/\s+/).length : 0;
+    const estimatedSeconds = Math.round(wordCount / 2.6); // ritmo de locución veloz en Shorts
+
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-0 overflow-hidden bg-gradient-to-br from-card to-muted/20 border-border/50">
-                <DialogHeader className="px-6 py-4 border-b border-border/50 bg-background/50 backdrop-blur-sm">
-                    <DialogTitle className="flex items-center gap-2 text-xl">
-                        <Video className="w-5 h-5 text-purple-500" />
-                        Estudio de Producción
-                    </DialogTitle>
+            <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-gradient-to-br from-card to-muted/20 border-border/50">
+                <DialogHeader className="px-6 py-4 border-b border-border/50 bg-background/50 backdrop-blur-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <DialogTitle className="flex items-center gap-2 text-xl">
+                            <Video className="w-5 h-5 text-purple-500" />
+                            Estudio de Producción
+                            {metadata.channel && (
+                                <Badge variant="secondary" className="font-semibold text-xs text-purple-600 bg-purple-500/10 border-purple-500/20">
+                                    {metadata.channel}
+                                </Badge>
+                            )}
+                        </DialogTitle>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            Guion y recursos cinematográficos calibrados con el ADN de tu canal
+                        </p>
+                    </div>
+
+                    {result && !loading && recommendation && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => generateProduction(recommendation)}
+                            className="text-xs shrink-0 border-purple-500/30 hover:bg-purple-500/10"
+                        >
+                            <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                            Regenerar Guion
+                        </Button>
+                    )}
                 </DialogHeader>
 
                 <div className="flex-1 overflow-hidden flex flex-col min-h-[400px]">
                     {loading ? (
                         <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8">
                             <Loader2 className="w-10 h-10 animate-spin text-purple-500 mb-4" />
-                            <h3 className="font-medium text-lg text-foreground">Generando producción completa...</h3>
-                            <p className="text-sm mt-2 text-center max-w-sm">
-                                El Productor IA está escribiendo el guion, armando el paquete SEO y redactando los prompts para Nanobanana y Google Flow.
+                            <h3 className="font-medium text-lg text-foreground">Generando producción especializada...</h3>
+                            <p className="text-sm mt-2 text-center max-w-md">
+                                Calibrando ritmo de 20-25s, remate con loop infinito y prompts cinematográficos para Nanobanana y Google Flow.
                             </p>
                         </div>
                     ) : error ? (
                         <div className="flex-1 flex flex-col items-center justify-center p-8 text-red-500">
-                            <p className="font-bold mb-2">Error al cargar el contenido.</p>
+                            <p className="font-bold mb-2">Error al generar la producción.</p>
                             <p className="text-xs max-w-sm text-center text-red-400 font-mono bg-red-950/20 dark:bg-red-950/30 p-3 rounded-lg border border-red-500/20">{errorMessage}</p>
-                            <Button variant="outline" size="sm" className="mt-4" onClick={() => { setError(false); setErrorMessage(""); }}>
+                            <Button variant="outline" size="sm" className="mt-4" onClick={() => recommendation && generateProduction(recommendation)}>
                                 Reintentar
                             </Button>
                         </div>
                     ) : result ? (
                         <Tabs defaultValue="script" className="flex-1 flex flex-col min-h-0">
-                            <div className="px-6 pt-4 bg-background/30 shrink-0">
-                                <TabsList className="grid w-full grid-cols-4 lg:w-[500px]">
+                            {/* Bar with metrics & tabs */}
+                            <div className="px-6 pt-3 pb-2 bg-background/40 border-b border-border/40 shrink-0 flex flex-wrap items-center justify-between gap-3">
+                                <TabsList className="grid w-full grid-cols-4 sm:w-[480px]">
                                     <TabsTrigger value="script">Tabla Técnica</TabsTrigger>
                                     <TabsTrigger value="clean">Libreto Limpio</TabsTrigger>
                                     <TabsTrigger value="seo">SEO</TabsTrigger>
                                     <TabsTrigger value="prompts">Prompts IA</TabsTrigger>
                                 </TabsList>
+
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <span className="flex items-center gap-1 bg-secondary/50 px-2.5 py-1 rounded-md">
+                                        <Clock className="w-3 h-3 text-primary" />
+                                        {metadata.estimatedDuration || `~${estimatedSeconds}s`}
+                                    </span>
+                                    <span className="flex items-center gap-1 bg-secondary/50 px-2.5 py-1 rounded-md">
+                                        <Flame className="w-3 h-3 text-amber-500" />
+                                        {wordCount} palabras
+                                    </span>
+                                </div>
                             </div>
 
                             <div className="flex-1 overflow-y-auto p-6">
                                 {/* --- Tab: Guion Técnico --- */}
                                 <TabsContent value="script" className="m-0 space-y-4">
                                     <div className="flex items-center justify-between mb-2">
-                                        <h3 className="font-semibold text-lg flex items-center gap-2"><Video className="w-4 h-4" /> Guion Técnico (30s)</h3>
+                                        <div>
+                                            <h3 className="font-semibold text-lg flex items-center gap-2">
+                                                <Video className="w-4 h-4 text-primary" /> 
+                                                Guion Técnico ({metadata.estimatedDuration || "20-25s"})
+                                            </h3>
+                                            <p className="text-xs text-muted-foreground">
+                                                Cortes visuales recomendados cada 3-4 segundos para retención máxima
+                                            </p>
+                                        </div>
                                         <CopyBtn text={JSON.stringify(scriptSections, null, 2)} id="tech-script" />
                                     </div>
                                     <div className="rounded-xl border border-border/50 overflow-hidden bg-background">
@@ -146,38 +196,75 @@ export function ScriptStudioModal({ open, onOpenChange, recommendation }: Script
                                             <thead className="bg-muted/50 text-muted-foreground">
                                                 <tr>
                                                     <th className="px-4 py-3 font-medium w-24">Tiempo</th>
-                                                    <th className="px-4 py-3 font-medium w-1/2">Visual (Pantalla)</th>
-                                                    <th className="px-4 py-3 font-medium w-1/2">Audio (Locución/Efectos)</th>
+                                                    <th className="px-4 py-3 font-medium w-1/2">Visual (Cámara / B-Roll / Texto)</th>
+                                                    <th className="px-4 py-3 font-medium w-1/2">Audio (Locución / Efecto)</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-border/50">
                                                 {scriptSections.map((sec: any, i: number) => (
                                                     <tr key={i} className="hover:bg-muted/20 transition-colors">
-                                                        <td className="px-4 py-3 font-medium whitespace-nowrap text-purple-600">{sec.timestamp}</td>
-                                                        <td className="px-4 py-3">{sec.visual}</td>
-                                                        <td className="px-4 py-3 font-medium italic">&quot;{sec.audio}&quot;</td>
+                                                        <td className="px-4 py-3 font-semibold whitespace-nowrap text-purple-600 dark:text-purple-400">
+                                                            {sec.timestamp}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-muted-foreground">
+                                                            {sec.visual}
+                                                        </td>
+                                                        <td className="px-4 py-3 font-medium text-foreground">
+                                                            &quot;{sec.audio}&quot;
+                                                        </td>
                                                     </tr>
                                                 ))}
                                             </tbody>
                                         </table>
                                     </div>
+
+                                    {loopConnection && (
+                                        <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs flex items-start gap-2.5">
+                                            <Repeat className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" />
+                                            <div>
+                                                <span className="font-bold text-purple-700 dark:text-purple-300">Técnica de Bucle Infinito (Loop): </span>
+                                                <span className="text-muted-foreground">{loopConnection}</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </TabsContent>
 
                                 {/* --- Tab: Libreto Limpio --- */}
                                 <TabsContent value="clean" className="m-0 space-y-4">
                                     <div className="flex items-center justify-between mb-2">
-                                        <h3 className="font-semibold text-lg flex items-center gap-2"><FileText className="w-4 h-4" /> Libreto para Locución</h3>
+                                        <div>
+                                            <h3 className="font-semibold text-lg flex items-center gap-2">
+                                                <FileText className="w-4 h-4 text-primary" /> 
+                                                Libreto para Locución
+                                            </h3>
+                                            <p className="text-xs text-muted-foreground">
+                                                {wordCount} palabras — pensado para leer de corrido sin respiraciones muertas
+                                            </p>
+                                        </div>
                                         <CopyBtn text={cleanScript} id="clean-script" />
                                     </div>
-                                    <div className="p-5 rounded-xl bg-background border border-border/50 whitespace-pre-wrap leading-relaxed text-foreground/90 font-medium text-base">
+                                    <div className="p-6 rounded-xl bg-background border border-border/50 whitespace-pre-wrap leading-relaxed text-foreground font-medium text-base shadow-sm">
                                         {cleanScript || "No se generó libreto limpio."}
                                     </div>
+
+                                    {loopConnection && (
+                                        <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs flex items-start gap-2.5">
+                                            <Repeat className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" />
+                                            <div>
+                                                <span className="font-bold text-purple-700 dark:text-purple-300">Efecto Loop: </span>
+                                                <span className="text-muted-foreground">{loopConnection}</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </TabsContent>
 
                                 {/* --- Tab: SEO --- */}
                                 <TabsContent value="seo" className="m-0 space-y-6">
                                     <div className="flex items-center justify-between mb-2">
-                                        <h3 className="font-semibold text-lg flex items-center gap-2"><Search className="w-4 h-4" /> Paquete SEO YouTube</h3>
+                                        <h3 className="font-semibold text-lg flex items-center gap-2">
+                                            <Search className="w-4 h-4 text-primary" /> 
+                                            Paquete SEO YouTube
+                                        </h3>
                                         <CopyBtn
                                             text={[seoTitle, seoDescription, seoHashtags.join(" "), seoTags].filter(Boolean).join("\n")}
                                             id="seo-pack"
@@ -190,9 +277,9 @@ export function ScriptStudioModal({ open, onOpenChange, recommendation }: Script
                                         </div>
                                         <div className="space-y-1.5 p-4 rounded-xl bg-background border border-border/50">
                                             <label className="text-xs font-bold text-muted-foreground uppercase">Descripción</label>
-                                            <p className="text-sm">{seoDescription}</p>
+                                            <p className="text-sm text-muted-foreground">{seoDescription}</p>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div className="space-y-1.5 p-4 rounded-xl bg-background border border-border/50">
                                                 <label className="text-xs font-bold text-muted-foreground uppercase">Hashtags</label>
                                                 <p className="text-sm text-blue-500 font-medium">{seoHashtags.join(" ")}</p>
@@ -208,12 +295,20 @@ export function ScriptStudioModal({ open, onOpenChange, recommendation }: Script
                                 {/* --- Tab: Prompts IA --- */}
                                 <TabsContent value="prompts" className="m-0 space-y-6">
                                     <div className="flex items-center justify-between mb-2">
-                                        <h3 className="font-semibold text-lg flex items-center gap-2"><ImageIcon className="w-4 h-4" /> Prompts Generativos</h3>
+                                        <div>
+                                            <h3 className="font-semibold text-lg flex items-center gap-2">
+                                                <ImageIcon className="w-4 h-4 text-primary" /> 
+                                                Prompts Generativos Cinematográficos
+                                            </h3>
+                                            <p className="text-xs text-muted-foreground">
+                                                Listos para copiar y pegar en Nanobanana (imágenes) y Google Flow (B-roll animado)
+                                            </p>
+                                        </div>
                                     </div>
 
                                     <div className="space-y-4">
                                         <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                            🍌 Nanobanana (Imágenes)
+                                            🍌 Nanobanana (Imágenes Ultra-Realistas)
                                         </h4>
                                         {nanobananPrompts.map((prompt: string, i: number) => (
                                             <div key={i} className="group relative p-4 rounded-xl bg-background border border-border/50 hover:border-purple-500/30 transition-colors">
@@ -227,7 +322,7 @@ export function ScriptStudioModal({ open, onOpenChange, recommendation }: Script
 
                                     <div className="space-y-4 mt-8">
                                         <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                            🌊 Google Flow (Videos)
+                                            🌊 Google Flow (Clips de Video para B-roll)
                                         </h4>
                                         {googleFlowPrompts.map((prompt: string, i: number) => (
                                             <div key={i} className="group relative p-4 rounded-xl bg-background border border-border/50 hover:border-blue-500/30 transition-colors">

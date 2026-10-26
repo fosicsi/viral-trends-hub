@@ -27,25 +27,40 @@ async function getYouTubeComments(videoId: string): Promise<string[]> {
     }
 }
 
-// AI Helpers removed in favor of _shared/ai-cascade.ts
-
 serve(async (req) => {
     if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
     try {
-        const authHeader = req.headers.get('Authorization');
+        const authHeader = req.headers.get('Authorization') || req.headers.get('authorization') || '';
         if (!authHeader) throw new Error("Missing Authorization");
 
-        const supabaseClient = createClient(
+        const token = authHeader.replace(/^Bearer\s+/i, '');
+
+        const supabaseAdmin = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-            { global: { headers: { Authorization: authHeader } } }
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         );
 
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        const userApiKey = user ? await getUserApiKey(supabaseClient, user.id, 'gemini') : null;
+        const { data: { user } } = await supabaseAdmin.auth.getUser(token);
+        const userApiKey = user ? await getUserApiKey(supabaseAdmin, user.id, 'gemini') : null;
 
-        const { videoTitle, channelName, context, videoId } = await req.json();
+        // Fetch user DNA
+        let identity: any = null;
+        if (user) {
+            const { data } = await supabaseAdmin
+                .from('user_channel_identities')
+                .select('identity_profile')
+                .eq('user_id', user.id)
+                .maybeSingle();
+            identity = data?.identity_profile;
+        }
+
+        const channelName = identity?.canal || "@magicaescocia";
+        const channelTone = identity?.tono || "Narrador dramático, misterioso, frases cortas";
+        const hookType = identity?.gancho_favorito || "Pregunta retórica";
+        const duration = identity?.duracion_objetivo || "20-30s";
+
+        const { videoTitle, channelName: originalChannel, context, videoId } = await req.json();
         if (!videoTitle) throw new Error("Missing videoTitle");
 
         let commentsContext = "";
@@ -61,31 +76,34 @@ serve(async (req) => {
             metricsContext = `MÉTRICAS: Vistas: ${context.views}, Subs: ${context.subs}, Viral Factor: ${context.reason}`;
         }
 
-        const prompt = `Actúa como un Estratega Viral y Guionista Profesional. Crea un guion superior al video original "${videoTitle}" de "${channelName}" siguiendo el Framework SKILL-3.
+        const prompt = `Actúa como un Estratega Viral y Guionista Profesional especializado en el canal "${channelName}".
+Tono del canal: "${channelTone}".
+Duración objetivo: "${duration}" (máx 65-75 palabras si es 20-30s).
+Estilo de gancho: "${hookType}".
+
+Crea un guion que adapte la temática del video original "${videoTitle}" (de "${originalChannel || 'YouTube'}") al estilo, tono y ADN de "${channelName}".
 ${metricsContext}
 ${commentsContext}
 
-REGLAS DE ORO (SKILL-3):
-1. **Hook**: Los primeros 5s deben ser explosivos (pregunta, dato o afirmación).
-2. **Problema/Insight**: Conecta con una tensión o curiosidad de la audiencia.
-3. **Solución/Historia**: Desarrolla la narrativa con ritmo y descripciones visuales.
-4. **Prueba**: Incluye datos o validación social.
-5. **CTA**: Un paso claro y motivador al final.
-- Escribe PARA EL OÍDO: frases cortas y lenguaje natural.
+REGLAS DE RETENCIÓN EXTREMA:
+1. **Hook (0-3s)**: Aplica "${hookType}". Entrada sin rodeos ni saludos ("Hola amigos"). Frase demoledora.
+2. **Desarrollo**: Oraciones percutantes para el oído, vocabulario sugerente y misterioso.
+3. **Loop Cierre**: La última frase debe conectar con el inicio para generar un bucle infinito en Shorts.
+4. **B-Roll**: Indicaciones visuales ambientadas en la estética del canal (escenas cinematográficas, niebla, piedra, misterio).
 
 Responde ÚNICAMENTE con este JSON: 
 {
     "analysis":{"gap_identified":"","opportunity":""},
-    "strategy":{"format":"","vibe":"","hook_technique":""},
+    "strategy":{"format":"Shorts (${duration})","vibe":"${channelTone}","hook_technique":"${hookType}"},
     "titles":["","",""],
     "script":{
-        "hook":"(0-5s) Texto exacto",
-        "intro":"(Problema/Insight) Texto exacto",
-        "body":"(Solución/Historia + Prueba) Texto exacto",
-        "cta":"(CTA Final) Texto exacto"
+        "hook":"(0-3s) Texto exacto",
+        "intro":"(3-9s Tensión) Texto exacto",
+        "body":"(9-20s Revelación) Texto exacto",
+        "cta":"(20-25s Cierre / Loop) Texto exacto"
     },
-    "seo":{"hashtags":[],"description_snippet":""},
-    "prompts":{"thumbnail_image":"","b_roll":""}
+    "seo":{"hashtags":["#shorts", "#${channelName.replace(/[@\\s]/g, '').toLowerCase()}"],"description_snippet":""},
+    "prompts":{"thumbnail_image":"Prompt detallado en inglés para miniatura cinematográfica","b_roll":"Prompt detallado en inglés para B-roll"}
 }`;
 
         const cascadeRes = await callWithCascade({

@@ -16,7 +16,10 @@ import { useChannelHealth } from "../hooks/useChannelHealth";
 import { generateSmartAlerts } from "../utils/smartAlerts";
 import { AnalyticsSkeleton } from "../components/placeholders/AnalyticsSkeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Settings2 } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { ChannelDNAPanel } from "../components/channel/ChannelDNAPanel";
+import { OwnShortsAnalysis } from "../components/channel/OwnShortsAnalysis";
 
 export default function AnalyticsDashboard() {
     const {
@@ -200,6 +203,10 @@ export default function AnalyticsDashboard() {
                         <Sparkles className="w-3 h-3 text-purple-500" />
                         Estrategia IA
                     </TabsTrigger>
+                    <TabsTrigger value="channel-dna" className="gap-2">
+                        <Settings2 className="w-3 h-3" />
+                        ADN del Canal
+                    </TabsTrigger>
                 </TabsList>
 
                 {/* TAB 1: Diagnóstico */}
@@ -251,6 +258,13 @@ export default function AnalyticsDashboard() {
                 {/* TAB 3: Estrategia IA */}
                 <TabsContent value="ai-recommendations">
                     <AIRecommendationsView />
+                </TabsContent>
+
+                {/* TAB 3: ADN del Canal */}
+                <TabsContent value="channel-dna" className="space-y-8">
+                    <OwnShortsAnalysis />
+                    <Separator className="my-8" />
+                    <ChannelDNAPanel />
                 </TabsContent>
             </Tabs>
         </div>

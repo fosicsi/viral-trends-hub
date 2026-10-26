@@ -33,12 +33,6 @@ interface OutlierVideo {
     publishedAt: string;
 }
 
-interface AIResponse {
-    recommendations: any[];
-    checklist?: any[];
-    confidence: number;
-}
-
 // --- Helpers: Decryption ---
 async function decrypt(hexStr: string, secret: string): Promise<string> {
     const data = decodeHex(hexStr);
@@ -64,10 +58,7 @@ async function getUserAnalytics(userId: string, supabaseAdmin: any): Promise<Use
     const description = stats.description || "";
     const title = stats.title || "";
     const combinedText = `${title} ${description}`.toLowerCase();
-    const extractedKeywords = combinedText.replace(/[^\w\sáéíóúñ]/g, ' ').split(/\s+/).filter((w: string) => w.length > 5).slice(0, 4);
-    // Channel DNA: always include core niche terms for @magicaescocia
-    const coreNicheTerms = ["scotland history mystery", "scottish warriors battles", "scotland legends dark secrets", "scottish castles haunted", "highland clans medieval"];
-    const nicheKeywords = extractedKeywords.length > 0 ? extractedKeywords : coreNicheTerms.slice(0, 3);
+    const extractedKeywords = combinedText.replace(/[^\w\sáéíóúñ]/g, ' ').split(/\s+/).filter((w: string) => w.length > 4).slice(0, 6);
 
     const topTrafficSources = (traffic.rows || []).map((r: any) => r[0]).slice(0, 3);
     let totalPct = 0; let totalWatchTime = 0; let totalSubsGained = 0; let count = 0;
@@ -84,19 +75,24 @@ async function getUserAnalytics(userId: string, supabaseAdmin: any): Promise<Use
     let recentVideos: string[] = [];
     if (interaction) {
         try {
-            const encryptionKey = Deno.env.get("OAUTH_ENCRYPTION_KEY")!;
+            const encryptionKey = Deno.env.get("OAUTH_ENCRYPTION_KEY") || "default-insecure-key";
             const accessToken = await decrypt(interaction.access_token, encryptionKey);
             const ytRes = await fetch(`https://www.googleapis.com/youtube/v3/activities?part=snippet,contentDetails&mine=true&maxResults=20&type=upload`, { headers: { Authorization: `Bearer ${accessToken}` } });
             const ytData = await ytRes.json();
-            if (ytData.items) recentVideos = ytData.items.map((v: any) => v.snippet.title);
+            if (ytData.items) recentVideos = ytData.items.map((v: any) => v.snippet?.title).filter(Boolean);
         } catch (e) { console.error("Failed to fetch recent videos", e); }
     }
 
     return {
-        subs: Number(stats.subscriberCount), views: Number(stats.viewCount),
+        subs: Number(stats.subscriberCount || 0),
+        views: Number(stats.viewCount || 0),
         avgRetention: count > 0 ? (totalPct / count) : 0,
-        watchTime: Math.round(totalWatchTime), subsGained: totalSubsGained,
-        topTrafficSources, topVideos: [], recentVideos, nicheKeywords
+        watchTime: Math.round(totalWatchTime),
+        subsGained: totalSubsGained,
+        topTrafficSources,
+        topVideos: [],
+        recentVideos,
+        nicheKeywords: extractedKeywords
     };
 }
 
@@ -107,7 +103,7 @@ async function searchOutliers(queries: string[], apiKey: string): Promise<Outlie
 
     for (const query of queries.slice(0, 3)) {
         try {
-            const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&order=viewCount&publishedAfter=${publishedAfter}&maxResults=10&key=${apiKey}`;
+            const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&videoDuration=short&order=viewCount&publishedAfter=${publishedAfter}&maxResults=10&key=${apiKey}`;
             const res = await fetch(searchUrl);
             const data = await res.json();
             if (!data.items) continue;
@@ -125,11 +121,15 @@ async function searchOutliers(queries: string[], apiKey: string): Promise<Outlie
                 const views = Number(vData.items?.[0]?.statistics?.viewCount || 0);
                 const ratio = views / Math.max(subs, 1);
 
-                if (views > 10000 && ratio > 2) {
+                if (views > 5000 && ratio > 1.5) {
                     outliers.push({
-                        title: item.snippet.title, channel: item.snippet.channelTitle,
-                        views, channelSubs: subs, growthRatio: ratio,
-                        url: `https://youtu.be/${videoId}`, publishedAt: item.snippet.publishedAt
+                        title: item.snippet.title,
+                        channel: item.snippet.channelTitle,
+                        views,
+                        channelSubs: subs,
+                        growthRatio: Math.round(ratio * 10) / 10,
+                        url: `https://youtu.be/${videoId}`,
+                        publishedAt: item.snippet.publishedAt
                     });
                 }
             }
@@ -138,7 +138,6 @@ async function searchOutliers(queries: string[], apiKey: string): Promise<Outlie
     return outliers.sort((a, b) => b.growthRatio - a.growthRatio).slice(0, 15);
 }
 
-// --- AI Core: Response Parsing ---
 function extractAndParseJSON(text: string): any {
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
@@ -162,114 +161,188 @@ Deno.serve(async (req) => {
 
         const body = await req.json().catch(() => ({}));
         if (!body.forceRefresh) {
-            const { data: cached } = await supabaseAdmin.from('ai_content_insights').select('*').eq('user_id', user.id).gte('expires_at', new Date().toISOString()).order('generated_at', { ascending: false }).limit(1).maybeSingle();
-            if (cached) return new Response(JSON.stringify({ recommendations: cached.recommendations, checklist: cached.checklist, cached: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            const { data: cached } = await supabaseAdmin
+                .from('ai_content_insights')
+                .select('*')
+                .eq('user_id', user.id)
+                .gte('expires_at', new Date().toISOString())
+                .order('generated_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (cached) {
+                return new Response(JSON.stringify({
+                    recommendations: cached.recommendations?.strategy || cached.recommendations,
+                    checklist: cached.recommendations?.checklist || cached.checklist,
+                    cached: true
+                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
         }
 
         const userAnalytics = await getUserAnalytics(user.id, supabaseAdmin);
-        const { data: identity } = await supabaseAdmin.from('user_channel_identities').select('*').eq('user_id', user.id).maybeSingle();
+        
+        // 1. Obtener o inferir perfil de identidad real
+        const { data: identity } = await supabaseAdmin
+            .from('user_channel_identities')
+            .select('*')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+        // Check creator_profiles as well
+        const { data: creatorProfile } = await supabaseAdmin
+            .from('creator_profiles')
+            .select('*')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
         let identityProfile = identity?.identity_profile;
 
-        if (!identityProfile) {
-            const bPrompt = `Crea un perfil de identidad estratégica para este canal basado en sus videos recientes: ${userAnalytics.recentVideos.join(', ')}. 
-            Identifica el tema principal, el estilo de comunicación, el público objetivo y el formato dominante (mucha atención a si son principalmente YouTube Shorts -busca #shorts- o videos horizontales).
-            Devuelve solo JSON: {"tema_principal":"","estilo":"","publico_objetivo":"","formato_dominante":""}`;
-            const profileRes = await callWithCascade({ prompt: bPrompt, customGeminiKey: userApiKey, jsonMode: true, temperature: 0.7, maxTokens: 4096 });
+        // If the profile has the 'canal' field (set via ChannelDNAPanel), use it directly
+        // without calling the LLM to infer it.
+        const hasUserDefinedDNA =
+            identityProfile &&
+            typeof identityProfile === 'object' &&
+            'canal' in identityProfile &&
+            (identityProfile as Record<string, unknown>).canal;
+
+        if (!identityProfile || !hasUserDefinedDNA) {
+            const contextVideos = userAnalytics.recentVideos.length > 0
+                ? userAnalytics.recentVideos.join(', ')
+                : (creatorProfile?.niche || "Contenido de interés general");
+
+            const bPrompt = `Crea un perfil de identidad estratégica para este canal de YouTube basándote en su nicho y títulos de videos recientes: "${contextVideos}".
+Identifica:
+1. tema_principal (ej. Finanzas, Fitness, Inteligencia Artificial, Historia, Gaming, Curiosidades)
+2. estilo (ej. Dinámico con datos duros, Documental misterioso, Motivacional, Educativo rápido)
+3. publico_objetivo (edad aproximada e intereses)
+4. formato_dominante ("Shorts (9:16)" o "Videos Largos (16:9)")
+
+Devuelve ÚNICAMENTE este formato JSON:
+{"tema_principal":"","estilo":"","publico_objetivo":"","formato_dominante":""}`;
+
+            const profileRes = await callWithCascade({ prompt: bPrompt, customGeminiKey: userApiKey, jsonMode: true, temperature: 0.5, maxTokens: 2048 });
             identityProfile = extractAndParseJSON(profileRes.text);
-            await supabaseAdmin.from('user_channel_identities').upsert({ user_id: user.id, identity_profile: identityProfile, last_learned_at: new Date().toISOString() });
+            await supabaseAdmin.from('user_channel_identities').upsert({
+                user_id: user.id,
+                identity_profile: identityProfile,
+                last_learned_at: new Date().toISOString()
+            });
         }
 
+        const channelTopic = (identityProfile as any)?.pilares || (identityProfile as any)?.tema_principal || creatorProfile?.niche || "Tendencias Virales";
+
+        // 2. Buscar Outliers específicos del nicho real del usuario
         let outliers: OutlierVideo[] = [];
         if (!body.forceSearch) {
-            const { data: last } = await supabaseAdmin.from('ai_content_insights').select('viral_outliers').eq('user_id', user.id).order('generated_at', { ascending: false }).limit(1).maybeSingle();
+            const { data: last } = await supabaseAdmin
+                .from('ai_content_insights')
+                .select('viral_outliers')
+                .eq('user_id', user.id)
+                .order('generated_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
             if (last?.viral_outliers) outliers = last.viral_outliers;
         }
 
         if (outliers.length === 0) {
-            // Channel DNA: search queries anchored in Scottish history niche
-            const channelDNAQueries = [
-                "scotland history secrets mysteries shorts",
-                "scottish warriors battles medieval shorts",
-                "haunted castles scotland legends shorts",
-                "celtic mythology scotland dark history",
-                "scottish clans highland battles"
+            const dynamicQueries = [
+                `${channelTopic} viral shorts`,
+                `${channelTopic} trucos datos curiosos shorts`,
+                `${channelTopic} top ideas tendencias shorts`
             ];
-            const queries = userAnalytics.nicheKeywords.length > 0 
-                ? [...userAnalytics.nicheKeywords.slice(0, 2), ...channelDNAQueries.slice(0, 2)] 
-                : channelDNAQueries.slice(0, 3);
-            outliers = await searchOutliers(queries, Deno.env.get("YOUTUBE_API_KEY")!);
+            const queriesToUse = userAnalytics.nicheKeywords.length > 0 
+                ? [`${channelTopic} ${userAnalytics.nicheKeywords[0]} shorts`, ...dynamicQueries.slice(0, 2)] 
+                : dynamicQueries;
+
+            outliers = await searchOutliers(queriesToUse, Deno.env.get("YOUTUBE_API_KEY")!);
         }
 
         // --- MULTI-AGENT PIPELINE ---
         
-        // AGENT 1: Data Analyst (Analista de Datos)
-        // Objetivo: Digerir las métricas y tendencias para definir la estrategia cruda.
-        const analystPrompt = `Eres un Analista de Datos de YouTube Shorts especializado en el canal @magicaescocia.
-        El canal trata sobre: Historia de Escocia — misterio, heroísmo, datos desconocidos, lo oscuro y épico. Guerreros, clanes, castillos, leyendas celtas, lo macabro y fascinante.
-        Perfil del canal: ${JSON.stringify(identityProfile)}
-        Métricas actuales: ${JSON.stringify(userAnalytics)}
-        Tendencias virales actuales en el nicho (Outliers): ${JSON.stringify(outliers)}
-        
-        INSTRUCCIÓN: Escribe un resumen estratégico de máximo 3 párrafos.
-        Identifica cuál es el principal problema a resolver (ej. retención inicial, falta de vistas) basado en las métricas.
-        Luego, basándote en los outliers virales, sugiere qué TEMÁTICA EXACTA de Escocia debería abordar el próximo Short.
-        Los pilares temáticos del canal son: (1) Resiliencia y supervivencia escocesa, (2) Lo macabro y fascinante, (3) Misticismo y folclore celta, (4) Identidad global escocesa.
-        NO des ideas de guion, solo diagnóstico y dirección temática.`;
+        // AGENTE 1: Data Analyst (Analista de Datos)
+        // Diagnóstico puramente analítico y matemático del canal
+        const ip = identityProfile as any;
+        const analystPrompt = `Eres un Analista Experto de Datos de YouTube enfocado en Shorts y Retención de Audiencia.
+Analiza este canal específico:
+- Canal específico: "${ip?.canal || 'Canal no especificado'}"
+- Pilares de contenido: "${ip?.pilares || channelTopic}"
+- Tono de voz del canal: "${ip?.tono || 'Dinámico y educativo'}"
+- Gancho favorito probado: "${ip?.gancho_favorito || 'Pregunta retórica'}"
+- Duración objetivo: "${ip?.duracion_objetivo || '20-30s'}"
+- Perfil Estratégico: ${JSON.stringify(identityProfile)}
+- Métricas Actuales: ${userAnalytics.views} vistas totales, ${userAnalytics.subs} suscriptores, ${userAnalytics.avgRetention}% retención promedio.
+- Tendencias Virales / Outliers Recientes en su Nicho: ${JSON.stringify(outliers.slice(0, 5))}
+
+INSTRUCCIÓN:
+Escribe un diagnóstico conciso en 2 o 3 párrafos:
+1. Diagnóstico del canal: ¿Cuál es el principal cuello de botella? (Retención de los primeros segundos, CTR o falta de tracción).
+2. Oportunidad identificada: Según los outliers de éxito en "${ip?.pilares || channelTopic}", ¿cuál es el ángulo de tema más prometedor hoy?
+3. Enfoque temático exacto para las próximas 3 piezas de contenido.
+(NO redactes guiones todavía, solo el diagnóstico estratégico).`;
         
         const analystRes = await callWithCascade({ prompt: analystPrompt, customGeminiKey: userApiKey, jsonMode: false, temperature: 0.3, maxTokens: 1000 });
         const diagnosis = analystRes.text;
 
-        // AGENT 2: Hook Specialist (Especialista en Ganchos)
-        // Objetivo: Crear los 3 primeros segundos de forma visceral y magnética.
-        const hookPrompt = `Eres un Especialista en Ganchos (Hooks) para YouTube Shorts.
-        Tu analista te ha dado esta dirección estratégica:
-        "${diagnosis}"
-        
-        INSTRUCCIÓN: Crea 3 conceptos de ganchos EXTREMADAMENTE virales (solo los primeros 3 segundos).
-        Deben pertenecer a "Comida Extrema" o "Guerreros Históricos".
-        Para cada gancho, describe exactamente qué se ve en pantalla (Visual) y qué se escucha (Audio).
-        El objetivo es que sea imposible hacer "swipe away" (deslizar).
-        Devuelve tu respuesta en texto plano estructurado.`;
+        // AGENTE 2: Hook Specialist (Especialista en Ganchos)
+        // Crea los primeros 3 segundos viscerales e imposibles de deslizar
+        const hookPrompt = `Eres un Especialista de Élite en Ganchos (Hooks) para YouTube Shorts.
+El canal usa principalmente el gancho tipo: "${ip?.gancho_favorito || 'Pregunta retórica'}"
+Tono de voz: "${ip?.tono || ''}"
+El Analista de Datos ha entregado esta dirección estratégica para el canal (${ip?.pilares || channelTopic}):
+"${diagnosis}"
+
+INSTRUCCIÓN:
+Diseña 3 conceptos de ganchos virales (primeros 3 segundos) adaptados al tema de "${ip?.pilares || channelTopic}".
+Prioriza el estilo de gancho: "${ip?.gancho_favorito || 'Pregunta retórica'}" y el tono: "${ip?.tono || 'dinámico'}".
+Cada gancho debe resolver el abandono inicial ("swipe away") usando una fórmula psicológica probada (Curiosidad Negativa, Revelación Contraintuitiva o Pregunta de Alta Tensión).
+Para cada gancho detalla:
+- Visual: Qué ocurre exactamente en pantalla en el segundo 0 a 3 (b-roll, texto en pantalla, efecto).
+- Audio: Qué frase exacta y concisa dice el creador.
+
+Devuelve tu respuesta en texto claro y estructurado.`;
 
         const hookRes = await callWithCascade({ prompt: hookPrompt, customGeminiKey: userApiKey, jsonMode: false, temperature: 0.8, maxTokens: 1500 });
         const hooks = hookRes.text;
 
-        // AGENT 3: Content Strategist (Estratega de Empaquetado - JSON Final)
-        // Objetivo: Tomar los ganchos y empaquetarlos en el formato JSON final esperado por la app.
-        const strategistPrompt = `Eres el Estratega Principal de Contenido.
-        Tu equipo ha desarrollado estos 3 Ganchos virales:
-        "${hooks}"
-        
-        INSTRUCCIÓN: Toma estos ganchos y desarróllalos en 3 propuestas completas de Shorts (15-30 segundos).
-        Desarrolla el guion completo para cada uno basándote en el gancho.
-        
-        Devuelve el resultado ESTRICTAMENTE en este formato JSON:
-        {
-          "recommendations": [
-            {
-              "niche": "Temática elegida",
-              "reasoning": "Por qué funcionará según el analista",
-              "confidence": 95,
-              "suggestedFormat": "Shorts (15-30s)",
-              "optimalLength": "20s",
-              "titleSuggestions": ["Título 1", "Título 2"],
-              "hashtagsSuggested": ["#short", "#viral"],
-              "bestTimeToPost": "18:00",
-              "retentionStrategy": "Gancho Visual: [Qué pasa en los 3s] -> Desarrollo: [Guion rápido de 15s sin respiros]"
-            }
-          ],
-          "checklist": [
-            {"task": "Aplica el gancho 1 de forma visceral", "description": "", "priority": "alta", "status": "pending"},
-            {"task": "Mantén el video por debajo de los 30s", "description": "", "priority": "alta", "status": "pending"}
-          ],
-          "confidence": 95
-        }`;
+        // AGENTE 3: Packaging & Retention Strategist (Estratega de Empaquetado y Guion)
+        // Consolida los ganchos y estructura el paquete completo
+        const displayTopic = ip?.pilares || channelTopic;
+        const strategistPrompt = `Eres el Estratega Principal de Contenido y Empaquetado para YouTube.
+Tema del canal: "${displayTopic}"
+Duración objetivo: "${ip?.duracion_objetivo || '20-30s'}"
+Diagnóstico del Analista: "${diagnosis.slice(0, 400)}"
+Ganchos creados por el Especialista:
+"${hooks}"
+
+INSTRUCCIÓN:
+Transforma estos ganchos en 3 propuestas completas y listas para producir en formato YouTube Short (15 a 30 segundos).
+
+Devuelve el resultado ESTRICTAMENTE en este formato JSON:
+{
+  "recommendations": [
+    {
+      "niche": "Sub-temática concreta dentro de ${channelTopic}",
+      "reasoning": "Por qué funcionará según los datos del analista",
+      "confidence": 92,
+      "suggestedFormat": "Shorts (15-30s)",
+      "optimalLength": "20s",
+      "titleSuggestions": ["Título viral con gancho 1", "Título viral alternativo 2"],
+      "hashtagsSuggested": ["#shorts", "#${channelTopic.replace(/\\s+/g, '').toLowerCase()}"],
+      "bestTimeToPost": "18:00",
+      "retentionStrategy": "Gancho Visual (0-3s): [Descripción visual] -> Desarrollo (3-18s): [Guion veloz sin respiros] -> Cierre (18-20s): [Llamado a la acción]"
+    }
+  ],
+  "checklist": [
+    {"task": "Enganchar en menos de 2 segundos antes del primer swipe", "description": "Usa texto en pantalla grande y corte dinámico inicial", "priority": "alta", "status": "pending"},
+    {"task": "Mantener el ritmo por debajo de 30 segundos", "description": "Elimina pausas de silencio para disparar el porcentaje de reproducción", "priority": "alta", "status": "pending"}
+  ],
+  "confidence": 92
+}`;
 
         const insightRes = await callWithCascade({ prompt: strategistPrompt, customGeminiKey: userApiKey, jsonMode: true, temperature: 0.7, maxTokens: 4096 });
         const aiResult = extractAndParseJSON(insightRes.text);
 
-        // FIX: Inject the outliers into each recommendation to avoid frontend crashes
-        // The frontend expects recommendation.outlierExamples to be an array
+        // Inyectar outliers de ejemplo en cada recomendación para el frontend
         if (aiResult.recommendations && Array.isArray(aiResult.recommendations)) {
             aiResult.recommendations.forEach((rec: any) => {
                 rec.outlierExamples = outliers.slice(0, 3);
@@ -277,14 +350,22 @@ Deno.serve(async (req) => {
         }
 
         await supabaseAdmin.from('ai_content_insights').insert({
-            user_id: user.id, channel_stats: userAnalytics, viral_outliers: outliers,
+            user_id: user.id,
+            channel_stats: userAnalytics,
+            viral_outliers: outliers,
             recommendations: { strategy: aiResult.recommendations, checklist: aiResult.checklist },
-            confidence_score: aiResult.confidence, expires_at: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString()
+            confidence_score: aiResult.confidence,
+            expires_at: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString()
         });
 
-        return new Response(JSON.stringify({ recommendations: aiResult.recommendations, checklist: aiResult.checklist, confidence: aiResult.confidence }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify({
+            recommendations: aiResult.recommendations,
+            checklist: aiResult.checklist,
+            confidence: aiResult.confidence
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
     } catch (e: any) {
+        console.error("[ai-content-insights] Error:", e);
         return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 });

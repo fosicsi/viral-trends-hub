@@ -20,6 +20,7 @@ import { Sparkles, Settings2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { ChannelDNAPanel } from "../components/channel/ChannelDNAPanel";
 import { OwnShortsAnalysis } from "../components/channel/OwnShortsAnalysis";
+import { AgentChatSheet } from "../components/chat/AgentChatSheet";
 
 export default function AnalyticsDashboard() {
     const {
@@ -267,6 +268,9 @@ export default function AnalyticsDashboard() {
                     <ChannelDNAPanel />
                 </TabsContent>
             </Tabs>
+
+            {/* Chat flotante con el Agente Copiloto */}
+            <AgentChatSheet />
         </div>
     );
 }

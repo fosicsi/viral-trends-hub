@@ -77,11 +77,12 @@ export function IntegrationCard({ platform, title, description, icon, integratio
                     headers: {
                         Authorization: `Bearer ${session.access_token}`,
                         'Content-Type': 'application/json',
+                        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
                     },
                 }
             );
             const data = await res.json();
-            if (data.error) throw new Error(data.error);
+            if (!res.ok || data.error) throw new Error(data.error || data.message || `Error ${res.status}`);
             setSyncResult({ videos: data.videos, channel: data.channel?.title });
             toast.success(`¡Sincronizado! ${data.videos} videos guardados de "${data.channel?.title}"`);
         } catch (err: any) {

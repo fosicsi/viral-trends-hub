@@ -1,6 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { crypto } from "https://deno.land/std@0.208.0/crypto/mod.ts";
-import { decodeHex } from "https://deno.land/std@0.208.0/encoding/hex.ts";
+import { getValidGoogleToken } from "../_shared/google-tokens.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,70 +7,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-
-// --- AUTH & CRYPTO HELPERS ---
-
-async function getMainKey(secret: string): Promise<CryptoKey> {
-  const encoder = new TextEncoder();
-  const keyBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(secret));
-  return await crypto.subtle.importKey(
-    "raw",
-    keyBuffer,
-    { name: "AES-GCM" },
-    false,
-    ["encrypt", "decrypt"]
-  );
-}
-
-async function decrypt(hexStr: string, secret: string): Promise<string> {
-  const data = decodeHex(hexStr);
-  const iv = data.slice(0, 12);
-  const ciphertext = data.slice(12);
-  const key = await getMainKey(secret);
-
-  const decrypted = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: iv },
-    key,
-    ciphertext
-  );
-  return new TextDecoder().decode(decrypted);
-}
-
-async function getUserGoogleToken(req: Request): Promise<string | null> {
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader) return null;
-
-  try {
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-    if (userError || !user) return null;
-
-    const { data: integration, error: dbError } = await supabaseAdmin
-      .from('user_integrations')
-      .select('access_token')
-      .eq('user_id', user.id)
-      .eq('platform', 'google')
-      .maybeSingle();
-
-    if (dbError || !integration) return null;
-
-    const encryptionKey = Deno.env.get("OAUTH_ENCRYPTION_KEY") || "default-insecure-key";
-    return await decrypt(integration.access_token, encryptionKey);
-  } catch (e) {
-    console.error("Error fetching user token:", e);
-    return null;
-  }
-}
 
 type ViralFilters = {
   minViews: number;
@@ -151,8 +86,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    // Priority: User's OAuth Token > Server Key
-    const userToken = await getUserGoogleToken(req);
+    const { accessToken: userToken, userId } = await getValidGoogleToken(req);
     const serverKey = Deno.env.get("YOUTUBE_API_KEY");
 
     // We use Bearer for OAuth tokens and ?key= for API keys
@@ -173,27 +107,27 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Create a cache key based on query and key filters (date/duration)
     const cacheKey = `search:${query}:${filters.date}:${filters.order}`;
 
-    // Try to get from cache (Global search cache would be better, but we reuse the table)
-    // We use a fixed user_id '00000000-0000-0000-0000-000000000000' for global cache or just rely on the user's cache if we want personalization.
-    // For now, let's use global cache for "search" to save max quota.
-    const GLOBAL_CACHE_USER = '00000000-0000-0000-0000-000000000000';
+    if (userId) {
+      try {
+        const { data: cached } = await supabaseAdmin
+          .from('youtube_analytics_cache')
+          .select('data')
+          .eq('user_id', userId)
+          .eq('data_type', cacheKey)
+          .gt('expires_at', new Date().toISOString())
+          .maybeSingle();
 
-    const { data: cached } = await supabaseAdmin
-      .from('youtube_analytics_cache')
-      .select('data')
-      .eq('user_id', GLOBAL_CACHE_USER)
-      .eq('data_type', cacheKey)
-      .gt('expires_at', new Date().toISOString())
-      .single();
-
-    if (cached?.data) {
-      console.log(`⚡ Cache Hit for: ${query}`);
-      return new Response(JSON.stringify({ success: true, data: cached.data }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+        if (cached?.data) {
+          console.log(`⚡ Cache Hit for: ${query}`);
+          return new Response(JSON.stringify({ success: true, data: cached.data }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      } catch (e) {
+        console.warn("Cache read warning:", e);
+      }
     }
 
     // 1. Configuración de parámetros comunes
@@ -326,16 +260,20 @@ Deno.serve(async (req) => {
       .slice(0, 48) // Limitamos a 48 para no saturar
       .map(({ _durSeconds, ...rest }) => rest);
 
-    // SAVE TO CACHE (Global: 24 hours)
-    if (cleanData.length > 0) {
-      await supabaseAdmin.from('youtube_analytics_cache').upsert({
-        user_id: GLOBAL_CACHE_USER,
-        data_type: cacheKey,
-        date_range: null,
-        data: cleanData,
-        fetched_at: new Date().toISOString(),
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-      }, { onConflict: 'user_id,data_type,date_range' });
+    // SAVE TO CACHE (24 hours TTL per user)
+    if (cleanData.length > 0 && userId) {
+      try {
+        await supabaseAdmin.from('youtube_analytics_cache').upsert({
+          user_id: userId,
+          data_type: cacheKey,
+          date_range: null,
+          data: cleanData,
+          fetched_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+        }, { onConflict: 'user_id,data_type,date_range' });
+      } catch (cacheErr) {
+        console.warn("Search cache write failed:", cacheErr);
+      }
     }
 
     return new Response(JSON.stringify({ success: true, data: cleanData }), {

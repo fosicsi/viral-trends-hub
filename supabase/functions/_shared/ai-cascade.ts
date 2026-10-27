@@ -10,7 +10,7 @@ export interface AICascadeOptions {
     customGeminiKey?: string | null;
 }
 
-export async function callGemini(options: AICascadeOptions): Promise<string> {
+export async function callGemini(options: AICascadeOptions, modelOverride?: string): Promise<string> {
     const apiKey = options.customGeminiKey || Deno.env.get('GEMINI_API_KEY');
     if (!apiKey) throw new Error("No GEMINI_API_KEY");
 
@@ -34,33 +34,51 @@ export async function callGemini(options: AICascadeOptions): Promise<string> {
         };
     }
 
-    const makeRequest = async () => {
-        return await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
+    // Try reliable, available models in order of stability
+    const candidateModels = modelOverride
+        ? [modelOverride]
+        : ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash-exp', 'gemini-1.5-pro'];
+
+    let lastError: any = null;
+
+    for (const model of candidateModels) {
+        try {
+            const makeRequest = async () => {
+                return await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    }
+                );
+            };
+
+            let res = await makeRequest();
+
+            // Retry once on 429 (rate limit) after a short wait
+            if (res.status === 429) {
+                console.log(`[Gemini:${model}] Rate limited, waiting 5s and retrying...`);
+                await new Promise(r => setTimeout(r, 5000));
+                res = await makeRequest();
             }
-        );
-    };
 
-    let res = await makeRequest();
+            if (!res.ok) {
+                const err = await res.text();
+                lastError = new Error(`Gemini ${model} ${res.status}: ${err.slice(0, 150)}`);
+                console.warn(`[Gemini:${model}] Failed (${res.status}): ${err.slice(0, 100)}`);
+                continue;
+            }
 
-    // Retry once on 429 (rate limit) after a short wait
-    if (res.status === 429) {
-        console.log('[Gemini] Rate limited, waiting 10s and retrying...');
-        await new Promise(r => setTimeout(r, 10000));
-        res = await makeRequest();
+            const data = await res.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) return text;
+        } catch (e: any) {
+            lastError = e;
+        }
     }
 
-    if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`Gemini ${res.status}: ${err.slice(0, 200)}`);
-    }
-
-    const data = await res.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    throw lastError || new Error("All Gemini models failed");
 }
 
 // =====================================================
@@ -109,36 +127,57 @@ export async function callOpenRouter(options: AICascadeOptions): Promise<string>
     }
     messages.push({ role: 'user', content: options.prompt });
 
-    // Use Gemini Flash via OpenRouter as fallback
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://viral-trends-hub.vercel.app',
-            'X-Title': 'Viral Trends Hub',
-        },
-        body: JSON.stringify({
-            model: 'google/gemini-2.0-flash-001',
-            messages,
-            temperature: options.temperature ?? 0.7,
-            max_tokens: options.maxTokens ?? 4096,
-        })
-    });
+    // Active models on OpenRouter with fallback
+    const modelsToTry = [
+        'google/gemini-flash-1.5',
+        'google/gemini-2.5-flash',
+        'meta-llama/llama-3.3-70b-instruct',
+        'google/gemini-flash-latest'
+    ];
 
-    if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`OpenRouter ${res.status}: ${errText.slice(0, 200)}`);
+    let lastError: any = null;
+
+    for (const model of modelsToTry) {
+        try {
+            const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                    'HTTP-Referer': 'https://viral-trends-hub.vercel.app',
+                    'X-Title': 'Viral Trends Hub',
+                },
+                body: JSON.stringify({
+                    model,
+                    messages,
+                    temperature: options.temperature ?? 0.7,
+                    max_tokens: options.maxTokens ?? 4096,
+                })
+            });
+
+            if (!res.ok) {
+                const errText = await res.text();
+                lastError = new Error(`OpenRouter ${model} ${res.status}: ${errText.slice(0, 150)}`);
+                console.warn(`[OpenRouter:${model}] Failed (${res.status}): ${errText.slice(0, 100)}`);
+                continue;
+            }
+
+            const data = await res.json();
+            const content = data.choices?.[0]?.message?.content;
+            if (content) return content;
+        } catch (e: any) {
+            lastError = e;
+        }
     }
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content || '';
+
+    throw lastError || new Error("All OpenRouter models failed");
 }
 
-export async function callGroq(options: AICascadeOptions): Promise<string> {
+export async function callGroq(options: AICascadeOptions, modelOverride?: string): Promise<string> {
     const apiKey = Deno.env.get('GROQ_API_KEY');
     if (!apiKey) throw new Error("No GROQ_API_KEY");
 
-    const messages = [];
+    const messages: Array<{ role: string; content: string }> = [];
     if (options.systemPrompt) {
         messages.push({ role: 'system', content: options.systemPrompt });
     }
@@ -148,14 +187,21 @@ export async function callGroq(options: AICascadeOptions): Promise<string> {
     const totalLength = messages.reduce((sum, m) => sum + m.content.length, 0);
     if (totalLength > 20000) {
         console.warn(`[Groq] Prompt too long (${totalLength} chars), truncating to fit context...`);
-        // Keep system prompt intact, truncate user message
         const userMsg = messages[messages.length - 1];
         const systemLen = messages.length > 1 ? messages[0].content.length : 0;
         userMsg.content = userMsg.content.slice(0, 18000 - systemLen);
     }
 
+    // Groq requires the term "json" in messages when response_format is json_object
+    if (options.jsonMode) {
+        const hasJson = messages.some(m => m.content.toLowerCase().includes('json'));
+        if (!hasJson) {
+            messages[0].content += " (Responde estrictamente en formato JSON válido)";
+        }
+    }
+
     const body: any = {
-        model: 'llama-3.3-70b-versatile',
+        model: modelOverride || 'llama-3.3-70b-versatile',
         messages,
         temperature: options.temperature ?? 0.7,
         max_tokens: Math.min(options.maxTokens ?? 4096, 4096),
@@ -183,11 +229,13 @@ export async function callGroq(options: AICascadeOptions): Promise<string> {
 }
 
 export async function callWithCascade(options: AICascadeOptions): Promise<{ text: string; provider: string }> {
+    // Opción 2: Groq como motor principal (Llama 3.3 70B & 3.1 8B instant), con cascada a Gemini, Perplexity y OpenRouter
     const providers = [
-        { name: 'Gemini 2.0 Flash', call: callGemini },
+        { name: 'Groq (Llama 3.3 70B)', call: (opts: AICascadeOptions) => callGroq(opts, 'llama-3.3-70b-versatile') },
+        { name: 'Groq Fast (Llama 3.1 8B)', call: (opts: AICascadeOptions) => callGroq(opts, 'llama-3.1-8b-instant') },
+        { name: 'Gemini Flash', call: (opts: AICascadeOptions) => callGemini(opts) },
         { name: 'Perplexity Sonar Pro', call: callPerplexity },
         { name: 'OpenRouter', call: callOpenRouter },
-        { name: 'Groq', call: callGroq },
     ];
 
     const errors: string[] = [];

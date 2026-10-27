@@ -37,27 +37,26 @@ Deno.serve(async (req) => {
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         );
 
-        // 0b. SERVER-SIDE CACHE CHECK (12h TTL)
+        // 0b. SERVER-SIDE CACHE CHECK (Hoy / 24h)
         const { data: { user } } = await supabaseClient.auth.getUser();
         const userId = user?.id;
         let format = body.format || 'mix';
+        const todayDate = new Date().toISOString().split('T')[0];
 
         if (userId) {
             const { data: cached } = await supabaseAdmin
-                .from('youtube_analytics_cache')
-                .select('data, fetched_at')
+                .from('morning_opportunities')
+                .select('data, updated_at')
                 .eq('user_id', userId)
-                .eq('data_type', 'morning_opportunities')
-                .eq('date_range', format)
-                .gte('expires_at', new Date().toISOString())
-                .single();
+                .eq('date', todayDate)
+                .maybeSingle();
 
-            if (cached) {
-                console.log(`[opportunities] ✅ Cache HIT (${cached.fetched_at}), returning ${(cached.data as any)?.length || 0} items`);
+            if (cached?.data && Array.isArray(cached.data) && cached.data.length > 0) {
+                console.log(`[opportunities] ✅ Cache HIT (${cached.updated_at}), returning ${cached.data.length} items`);
                 return new Response(JSON.stringify({
                     success: true,
                     data: cached.data,
-                    meta: { source: 'cache', fetchedAt: cached.fetched_at }
+                    meta: { source: 'cache', fetchedAt: cached.updated_at }
                 }), {
                     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
                 });
@@ -81,7 +80,7 @@ Deno.serve(async (req) => {
             // Get user's YouTube channel data
             const { data: channels } = await supabaseClient
                 .from('youtube_channels')
-                .select('youtube_channel_id, channel_title, subscriber_count, total_views, video_count')
+                .select('id, youtube_channel_id, channel_title, subscriber_count, total_views, video_count')
                 .eq('user_id', user.id)
                 .limit(1);
 
@@ -270,18 +269,17 @@ Deno.serve(async (req) => {
 
         console.log(`[opportunities] ✅ ${opportunities.length} intelligent opportunities generated`);
 
-        // 5. CACHE the results server-side (12h TTL)
-        if (userId) {
+        // 5. CACHE the results server-side in morning_opportunities table
+        if (userId && opportunities.length > 0) {
             try {
-                await supabaseAdmin.from('youtube_analytics_cache').upsert({
+                await supabaseAdmin.from('morning_opportunities').upsert({
                     user_id: userId,
-                    data_type: 'morning_opportunities',
-                    date_range: format,
+                    date: todayDate,
                     data: opportunities,
-                    fetched_at: new Date().toISOString(),
-                    expires_at: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString()
-                }, { onConflict: 'user_id,data_type,date_range' });
-                console.log('[opportunities] Cached to DB (12h TTL)');
+                    keyword_used: searchTerms.slice(0, 5).join(', '),
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'user_id,date' });
+                console.log('[opportunities] Cached to morning_opportunities table');
             } catch (cacheErr: any) {
                 console.warn('[opportunities] Cache write failed:', cacheErr.message);
             }

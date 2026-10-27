@@ -7,66 +7,72 @@ import { Zap } from 'lucide-react';
 export default function OnboardingGuard({ children }: { children: React.ReactNode }) {
     const navigate = useNavigate();
     const location = useLocation();
-    const [status, setStatus] = useState<'loading' | 'connected' | 'onboarding'>('loading');
+    const [status, setStatus] = useState<'loading' | 'connected' | 'onboarding' | 'exempt'>('loading');
 
     useEffect(() => {
+        let isMounted = true;
+
         const checkConnection = async () => {
             try {
                 const { data: { session } } = await supabase.auth.getSession();
-                console.log("[OnboardingGuard] Session check:", !!session);
 
                 if (!session) {
-                    console.log("[OnboardingGuard] No session, redirecting to /auth");
                     if (location.pathname !== '/auth') {
-                        navigate('/auth');
+                        navigate('/auth', { replace: true });
                     }
                     return;
                 }
 
+                // If user is accessing Integrations or Profile, allow access once authenticated
+                const isExempt = location.pathname === '/integrations' || location.pathname === '/profile';
+                if (isExempt) {
+                    if (isMounted) setStatus('exempt');
+                    return;
+                }
+
                 // Logged in, check integrations and profile in parallel
-                console.log("[OnboardingGuard] Fetching integrations and profile...");
                 const [integrationsRes, profileRes] = await Promise.all([
                     integrationsApi.getStatus(),
                     supabase.from('creator_profiles' as any).select('user_id').eq('user_id', session.user.id).maybeSingle()
                 ]);
 
+                if (!isMounted) return;
+
                 const integrations = integrationsRes.data;
                 const profile = profileRes.data;
-                console.log("[OnboardingGuard] Integrations found:", integrations?.length || 0);
-
                 const hasYoutube = integrations?.some(i => i.platform === 'youtube' || i.platform === 'google');
-                console.log("[OnboardingGuard] hasYoutube:", hasYoutube);
 
                 if (hasYoutube) {
                     if (profile) {
-                        console.log("[OnboardingGuard] Connected + Profile, status -> connected");
                         setStatus('connected');
                     } else {
-                        console.log("[OnboardingGuard] Connected but NO Profile, status -> onboarding");
                         setStatus('onboarding');
                         if (location.pathname !== '/onboarding') {
-                            navigate('/onboarding');
+                            navigate('/onboarding', { replace: true });
                         }
                     }
                 } else {
-                    console.log("[OnboardingGuard] Not connected, status -> onboarding");
                     setStatus('onboarding');
-                    // If not on onboarding page, redirect
                     if (location.pathname !== '/onboarding') {
-                        console.log("[OnboardingGuard] Redirecting to /onboarding");
-                        navigate('/onboarding');
+                        navigate('/onboarding', { replace: true });
                     }
                 }
             } catch (error) {
-                console.error("[OnboardingGuard] Error:", error);
-                setStatus('onboarding');
-                if (location.pathname !== '/onboarding') {
-                    navigate('/onboarding');
+                console.error("[OnboardingGuard] Error checking connection:", error);
+                if (isMounted) {
+                    setStatus('onboarding');
+                    if (location.pathname !== '/onboarding' && location.pathname !== '/integrations' && location.pathname !== '/profile') {
+                        navigate('/onboarding', { replace: true });
+                    }
                 }
             }
         };
 
         checkConnection();
+
+        return () => {
+            isMounted = false;
+        };
     }, [navigate, location.pathname]);
 
     if (status === 'loading') {
@@ -80,19 +86,21 @@ export default function OnboardingGuard({ children }: { children: React.ReactNod
         );
     }
 
-    // If we're on the onboarding path and connected, go home
+    // Exempt paths (integrations, profile) can always render for authenticated users
+    if (status === 'exempt') {
+        return <>{children}</>;
+    }
+
+    // If connected and user is navigating to onboarding, redirect home
     if (status === 'connected' && location.pathname === '/onboarding') {
-        navigate('/');
+        navigate('/', { replace: true });
         return null;
     }
 
-    // IMPORTANT: If we are NOT connected and NOT on the onboarding page, 
-    // we should NOT render the children (the dashboard) while the navigation is pending.
+    // Block render while redirect to /onboarding is pending
     if (status === 'onboarding' && location.pathname !== '/onboarding') {
-        console.log("[OnboardingGuard] Blocking render, redirecting...");
         return null;
     }
 
-    // Allow children if connected or if specifically on the onboarding page
     return <>{children}</>;
 }

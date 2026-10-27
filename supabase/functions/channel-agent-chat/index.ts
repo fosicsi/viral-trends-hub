@@ -92,9 +92,41 @@ Deno.serve(async (req) => {
             }
         }
 
-        // 4. Construir System Prompt especializado para @magicaescocia
-        const systemPrompt = `Eres el Agente Estratega y Copiloto de Inteligencia Artificial de YouTube Shorts para el canal "${channelName}".
-Eres un consultor experto de nivel mundial en retención, psicología de audiencia y algoritmos de YouTube Shorts.
+        // 4. Base de Conocimiento de Políticas y Buenas Prácticas de YouTube (Grounding / RAG)
+        const { data: policyRules } = await supabaseAdmin
+            .from('youtube_policy_rules')
+            .select('title, category, risk_level, summary, dos, donts, official_reference_url, keywords')
+            .order('risk_level', { ascending: false });
+
+        let policiesText = "";
+        if (policyRules && policyRules.length > 0) {
+            const queryLower = currentQuery.toLowerCase();
+            
+            // Priorizar reglas que coincidan con palabras clave de la consulta, o incluir resumen de las principales
+            const matchedRules = policyRules.filter((r: any) => {
+                const kw = Array.isArray(r.keywords) ? r.keywords : [];
+                return kw.some((k: string) => queryLower.includes(k.toLowerCase())) ||
+                       queryLower.includes(r.category.toLowerCase()) ||
+                       queryLower.includes(r.title.toLowerCase());
+            });
+
+            // Si hay coincidencias específicas, usamos esas; de lo contrario incluimos las reglas clave de mayor riesgo
+            const activeRules = matchedRules.length > 0 ? matchedRules : policyRules.slice(0, 6);
+
+            policiesText = activeRules.map((r: any) => {
+                const dosStr = Array.isArray(r.dos) ? r.dos.map((d: string) => `  ✓ ${d}`).join('\n') : '';
+                const dontsStr = Array.isArray(r.donts) ? r.donts.map((d: string) => `  ✗ ${d}`).join('\n') : '';
+                return `### [${r.risk_level.toUpperCase()}] ${r.title} (Categoría: ${r.category})
+Resumen: ${r.summary}
+${dosStr ? `Qué SÍ hacer:\n${dosStr}` : ''}
+${dontsStr ? `Qué NUNCA hacer:\n${dontsStr}` : ''}
+${r.official_reference_url ? `Ref oficial: ${r.official_reference_url}` : ''}`;
+            }).join('\n\n');
+        }
+
+        // 5. Construir System Prompt especializado para el canal y cumplimiento de YouTube
+        const systemPrompt = `Eres el Agente Estratega, Copiloto Creativo y Guardián de Políticas de YouTube Shorts para el canal "${channelName}".
+Eres un consultor experto de nivel mundial en retención, psicología de audiencia, algoritmos de YouTube Shorts y cumplimiento estricto de las Políticas Oficiales de YouTube.
 
 ## CONTEXTO REAL DE ESTE CANAL:
 - Canal: ${channelName}
@@ -108,14 +140,17 @@ Eres un consultor experto de nivel mundial en retención, psicología de audienc
 ## SHORTS CON MEJOR DESEMPEÑO EN ESTE CANAL (La audiencia ama esto):
 ${topVideosText}
 
-${bottomVideosText ? `## SHORTS CON MENOR ALCANCE (Evitar estos ángulos o títulos planos):\n${bottomVideosText}` : ''}
+${bottomVideosText ? `## SHORTS CON MENOR ALCANCE (Evitar estos ángulos o títulos planos):\n${bottomVideosText}\n` : ''}
+## BASE NORMATIVA Y POLÍTICAS OFICIALES DE YOUTUBE (COLUMNA VERTEBRAL):
+${policiesText || "Políticas estándar de YouTube vigentes aplicables."}
 
 ## TUS PRINCIPIOS DE ASESORAMIENTO:
 1. Respuestas directas, concisas y listas para la acción (usa viñetas y formato Markdown legible).
 2. Si te pide ganchos o guiones, redáctalos con el tono exacto de ${channelName}: suspenso, niebla, historia oculta, leyendas celtas, frases cortas para el oído.
 3. Recuerda siempre la técnica de Bucle Infinito (Loop): la última frase del guion debe encajar con la primera frase del gancho.
-4. Fundamenta tus sugerencias en los datos reales del canal cuando sea relevante.
-5. Habla en español, con actitud de estratega apasionado y riguroso.`;
+4. ASESORÍA EN POLÍTICAS Y SEGURIDAD: Si el creador pregunta sobre usar música comercial, fragmentos de video, imágenes de terceros, temas polémicos, IA o monetización, evalúa de inmediato el RIESGO (Seguro, Precaución, Alto Riesgo, Crítico). Explica la diferencia entre un Content ID claim (reparto de ingresos) y un Copyright Strike (falta por copyright con riesgo de cierre del canal).
+5. Ofrécele siempre alternativas 100% seguras (ej: YouTube Audio Library, materiales de dominio público con transformación sustancial, licencias comerciales como Envato/Epidemic Sound).
+6. Habla en español, con actitud de estratega apasionado, protector y riguroso.`;
 
         // 5. Formatear historial de conversación
         let conversationPrompt = "";

@@ -20,25 +20,18 @@ export function ViralSettingsDialog({
   onToggleTheme
 }: ViralSettingsDialogProps) {
   const [youtubeKey, setYoutubeKey] = useState("");
-  const [geminiKey, setGeminiKey] = useState("");
 
   // Cargar keys guardadas al abrir
   useEffect(() => {
     if (open) {
       setYoutubeKey(localStorage.getItem("youtube_api_key") || "");
-      // Buscamos la key de Gemini (si existía la de openai, la ignoramos o migramos manualmente)
-      setGeminiKey(localStorage.getItem("gemini_api_key") || "");
     }
   }, [open]);
 
   const handleSave = () => {
-    // Guardar YouTube Key
+    // Guardar YouTube Key opcional
     if (youtubeKey) localStorage.setItem("youtube_api_key", youtubeKey);
     else localStorage.removeItem("youtube_api_key");
-
-    // Guardar Gemini Key (Importante: nombre de variable 'gemini_api_key')
-    if (geminiKey) localStorage.setItem("gemini_api_key", geminiKey);
-    else localStorage.removeItem("gemini_api_key");
 
     onOpenChange(false);
   };
@@ -85,19 +78,19 @@ export function ViralSettingsDialog({
                 <p className="text-[10px] text-muted-foreground">Necesaria para buscar videos reales y obtener métricas.</p>
               </div>
 
-              {/* Google Gemini API */}
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-primary">
-                  <Sparkles className="w-4 h-4 text-yellow-400 fill-yellow-400" /> Motor Generativo (Google Gemini)
-                </Label>
-                <Input 
-                  placeholder="AIzaSy... (Tu clave de Google AI Studio)" 
-                  className="rounded-xl bg-surface/50 border-border focus-visible:ring-primary/20 font-mono text-sm"
-                  value={geminiKey}
-                  onChange={(e) => setGeminiKey(e.target.value)}
-                  type="password"
-                />
-                <p className="text-[10px] text-muted-foreground">Gratis. Necesaria para crear los guiones con IA.</p>
+              {/* Motor de Inteligencia Artificial (Groq Nativo) */}
+              <div className="space-y-2 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-500">
+                    <Zap className="w-4 h-4 fill-amber-500/20" /> Motor de IA (Groq Llama 3.3)
+                  </Label>
+                  <span className="text-[10px] bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-full">
+                    NATIVO & ACTIVO
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Inferencia ultra rápida en el servidor (~300 tokens/seg). No requiere configuración de claves externas ni tarjetas.
+                </p>
               </div>
 
             </div>

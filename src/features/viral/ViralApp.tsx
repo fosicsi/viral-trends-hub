@@ -254,12 +254,11 @@ export default function ViralApp() {
   };
 
   const handleAiViral = async () => {
-    const apiKey = localStorage.getItem("gemini_api_key");
     const preset: ViralFilters = { minViews: 5000, maxSubs: 1000_000, date: "year", type: "video", order: "relevance" };
     setAiLoading(true);
     setAiCriteria(null);
     try {
-      const res = await aiViralTopic(apiKey || undefined);
+      const res = await aiViralTopic();
       if (!res.success) { setViralError(res.error || "Error IA"); return; }
       setViralFilters(preset);
       setViralTopic(res.topic);
@@ -267,7 +266,7 @@ export default function ViralApp() {
       setAiCriteria(res.criteria);
       setView("viral");
       await handleSearchGeneric(res.query, preset, true);
-    } catch (e) { setViralError("Error conectando con IA"); } finally { setAiLoading(false); }
+    } catch (e) { setViralError("Error conectando con el motor de IA"); } finally { setAiLoading(false); }
   };
 
   const runViralSearch = (topic?: string, overrideFilters?: ViralFilters) => {

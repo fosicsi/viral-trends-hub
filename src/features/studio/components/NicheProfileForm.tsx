@@ -106,6 +106,25 @@ export function NicheProfileForm({ onComplete }: NicheProfileFormProps) {
 
             if (error) throw error;
 
+            // Sincronizar simultáneamente con creator_profiles y user_channel_identities
+            await Promise.allSettled([
+                supabase.from('creator_profiles' as any).upsert({
+                    user_id: session.user.id,
+                    niche: finalKeywords[0] || 'Contenido Digital',
+                    updated_at: new Date().toISOString()
+                }),
+                supabase.from('user_channel_identities' as any).upsert({
+                    user_id: session.user.id,
+                    identity_profile: {
+                        tema_principal: finalKeywords[0] || 'Contenido Digital',
+                        estilo: 'Dinámico y enfocado en retención',
+                        publico_objetivo: 'General',
+                        formato_dominante: format === 'short' ? 'Shorts' : format === 'long' ? 'Videos Largos' : 'Mix'
+                    },
+                    last_learned_at: new Date().toISOString()
+                }, { onConflict: 'user_id' })
+            ]);
+
             toast({
                 title: "Perfil Guardado",
                 description: "Tus recomendaciones ahora serán mucho más precisas.",

@@ -129,72 +129,86 @@ export function MorningDashboard({
 
                 let views48h = 0, subsGained48h = 0, avgViewPct48h = 0, ctr48h = 0;
                 let fetchedAt: string | null = null;
+                let videoCount = 0;
 
                 // Helper: find column index by metric name in columnHeaders
                 const findCol = (headers: any[], name: string): number =>
                     headers.findIndex((h: any) => h.name === name);
 
-                // 1. Main metrics (use defaults — no custom metrics to avoid cache column mismatch)
-                try {
-                    const mainReport = await integrationsApi.getReports(
-                        'youtube', startDate, endDate, 'day'
-                    );
-                    if (mainReport?.report?.rows && mainReport?.report?.columnHeaders) {
-                        const headers = mainReport.report.columnHeaders;
-                        const iViews = findCol(headers, 'views');
-                        const iSubs = findCol(headers, 'subscribersGained');
-                        const iPct = findCol(headers, 'averageViewPercentage');
-
-                        let totalPct = 0, totalDays = 0;
-                        for (const row of mainReport.report.rows) {
-                            if (iViews >= 0) views48h += Number(row[iViews] || 0);
-                            if (iSubs >= 0) subsGained48h += Number(row[iSubs] || 0);
-                            if (iPct >= 0) {
-                                const pct = Number(row[iPct] || 0);
-                                if (pct > 0) { totalPct += pct; totalDays++; }
-                            }
-                        }
-                        avgViewPct48h = totalDays > 0 ? totalPct / totalDays : 0;
-                    }
-                    if (mainReport?.fetchedAt) fetchedAt = mainReport.fetchedAt;
-                } catch (e: any) {
-                    console.warn('Home: main metrics fetch failed', e);
-                    if (e.message === 'AUTH_REVOKED') setAuthRevoked(true);
-                }
-
-                // 2. CTR metric (separate — incompatible with subscription metrics)
-                try {
-                    const ctrReport = await integrationsApi.getReports(
-                        'youtube', startDate, endDate, 'day',
-                        'views,videoThumbnailImpressions,videoThumbnailImpressionsClickRate'
-                    );
-                    if (ctrReport?.report?.rows) {
-                        let totalImpressions = 0, totalClicks = 0;
-                        for (const row of ctrReport.report.rows) {
-                            const dayImpressions = Number(row[2] || 0);
-                            const dayRate = Number(row[3] || 0);
-                            totalImpressions += dayImpressions;
-                            totalClicks += dayImpressions * (dayRate / 100);
-                        }
-                        ctr48h = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
-                    }
-                    if (!fetchedAt && ctrReport?.fetchedAt) fetchedAt = ctrReport.fetchedAt;
-                } catch (e: any) {
-                    console.warn('Home: CTR fetch failed', e);
-                    if (e.message === 'AUTH_REVOKED') setAuthRevoked(true);
-                }
-
-                const newStats = { views48h, ctr48h, avgViewPct48h, subsGained48h, fetchedAt, videoCount: 0 };
-
-                // 3. Get channel details (video count)
+                // 1. Check status first to see if user has an active connection
+                let activePlatform: string | null = null;
                 try {
                     const { data: integrations } = await integrationsApi.getStatus();
-                    const youtube = integrations?.find(i => i.platform === 'youtube' || i.platform === 'google');
-                    if (youtube?.metadata?.stats) {
-                        newStats.videoCount = Number(youtube.metadata.stats.videoCount || 0);
+                    const activeInt = integrations?.find(i => i.platform === 'google' || i.platform === 'youtube');
+                    if (activeInt) {
+                        activePlatform = activeInt.platform;
+                        if (activeInt.authError === 'AUTH_REVOKED') {
+                            setAuthRevoked(true);
+                        }
+                        if (activeInt.metadata?.stats) {
+                            videoCount = Number(activeInt.metadata.stats.videoCount || 0);
+                        }
                     }
-                } catch (e) { console.warn('Home: videoCount fetch failed', e); }
+                } catch (e) {
+                    console.warn('Home: status check failed', e);
+                }
 
+                if (activePlatform) {
+                    // 2. Main metrics (7-day window)
+                    try {
+                        const mainReport = await integrationsApi.getReports(
+                            activePlatform, startDate, endDate, 'day'
+                        );
+                        if (mainReport?.report?.rows && mainReport?.report?.columnHeaders) {
+                            const headers = mainReport.report.columnHeaders;
+                            const iViews = findCol(headers, 'views');
+                            const iSubs = findCol(headers, 'subscribersGained');
+                            const iPct = findCol(headers, 'averageViewPercentage');
+
+                            let totalPct = 0, totalDays = 0;
+                            for (const row of mainReport.report.rows) {
+                                if (iViews >= 0) views48h += Number(row[iViews] || 0);
+                                if (iSubs >= 0) subsGained48h += Number(row[iSubs] || 0);
+                                if (iPct >= 0) {
+                                    const pct = Number(row[iPct] || 0);
+                                    if (pct > 0) { totalPct += pct; totalDays++; }
+                                }
+                            }
+                            avgViewPct48h = totalDays > 0 ? totalPct / totalDays : 0;
+                            setAuthRevoked(false); // Live data loaded successfully
+                        }
+                        if (mainReport?.fetchedAt) fetchedAt = mainReport.fetchedAt;
+                    } catch (e: any) {
+                        console.warn('Home: main metrics fetch failed', e);
+                        if (e.message === 'AUTH_REVOKED') setAuthRevoked(true);
+                    }
+
+                    // 3. CTR metric (separate group with valid metrics: impressions,impressionClickThroughRate)
+                    try {
+                        const ctrReport = await integrationsApi.getReports(
+                            activePlatform, startDate, endDate, 'day',
+                            'impressions,impressionClickThroughRate'
+                        );
+                        if (ctrReport?.report?.rows && ctrReport?.report?.columnHeaders) {
+                            const headers = ctrReport.report.columnHeaders;
+                            const iImp = findCol(headers, 'impressions');
+                            const iCtr = findCol(headers, 'impressionClickThroughRate');
+                            let totalImpressions = 0, totalClicks = 0;
+                            for (const row of ctrReport.report.rows) {
+                                const dayImpressions = iImp >= 0 ? Number(row[iImp] || 0) : 0;
+                                const dayRate = iCtr >= 0 ? Number(row[iCtr] || 0) : 0;
+                                totalImpressions += dayImpressions;
+                                totalClicks += dayImpressions * (dayRate / 100);
+                            }
+                            ctr48h = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+                        }
+                        if (!fetchedAt && ctrReport?.fetchedAt) fetchedAt = ctrReport.fetchedAt;
+                    } catch (e: any) {
+                        console.warn('Home: CTR fetch failed (non-blocking)', e);
+                    }
+                }
+
+                const newStats = { views48h, ctr48h, avgViewPct48h, subsGained48h, fetchedAt, videoCount };
                 setStats(newStats);
                 localStorage.setItem('vth_stats_cache', JSON.stringify({ timestamp: Date.now(), data: newStats }));
 
@@ -215,6 +229,20 @@ export function MorningDashboard({
         };
         loadStats();
     }, []);
+
+    const handleDirectReconnect = async () => {
+        try {
+            const res: any = await integrationsApi.initiateConnection('google', 'select_account consent');
+            const url = res?.url || res?.data?.url;
+            if (url) {
+                window.location.href = url;
+            } else {
+                onNavigate('integrations');
+            }
+        } catch {
+            onNavigate('integrations');
+        }
+    };
 
     // -- Load morning opportunities --
     useEffect(() => {
@@ -497,17 +525,36 @@ export function MorningDashboard({
                 {/* Stat Cards */}
                 <TooltipProvider delayDuration={200}>
                     {authRevoked && (
-                        <div className="mb-6 p-4 rounded-2xl border border-red-500/30 bg-red-500/10 flex flex-col md:flex-row items-center justify-between gap-4">
+                        <div className="mb-6 p-4 rounded-2xl border border-red-500/40 bg-red-500/10 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
                             <div className="flex items-center gap-3">
-                                <AlertCircle className="w-5 h-5 text-red-500" />
+                                <div className="p-2 rounded-xl bg-red-500/20 text-red-500">
+                                    <AlertCircle className="w-5 h-5" />
+                                </div>
                                 <div>
-                                    <h3 className="text-sm font-bold text-red-500">Sesión Expirada</h3>
-                                    <p className="text-xs text-red-400/80">Tu sesión de YouTube caducó o el acceso fue revocado. Vuelve a conectar tu canal para cargar métricas y oportunidades reales.</p>
+                                    <h3 className="text-sm font-bold text-red-500">Sesión Expirada de YouTube</h3>
+                                    <p className="text-xs text-red-400/90">
+                                        El token de acceso de Google caducó. Puedes reconectarlo con 1 clic para volver a ver tus métricas reales.
+                                    </p>
                                 </div>
                             </div>
-                            <Button variant="outline" size="sm" className="border-red-500/50 text-red-500 hover:bg-red-500/20 whitespace-nowrap" onClick={() => onNavigate('integrations')}>
-                                Ir a Integraciones
-                            </Button>
+                            <div className="flex items-center gap-2 w-full md:w-auto">
+                                <Button 
+                                    size="sm" 
+                                    className="bg-red-600 hover:bg-red-700 text-white font-bold w-full md:w-auto shadow-sm"
+                                    onClick={handleDirectReconnect}
+                                >
+                                    <RefreshCcw className="w-3.5 h-3.5 mr-1.5" />
+                                    Reconectar Canal Ahora
+                                </Button>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="border-red-500/40 text-red-400 hover:bg-red-500/10 whitespace-nowrap"
+                                    onClick={() => onNavigate('integrations')}
+                                >
+                                    Ver Integraciones
+                                </Button>
+                            </div>
                         </div>
                     )}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

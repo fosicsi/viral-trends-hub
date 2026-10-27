@@ -12,7 +12,8 @@ import {
   Clapperboard,
   Target,
   Key,
-  Plug
+  Plug,
+  ShieldCheck
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -173,6 +174,26 @@ export function ViralSidebar({
               strokeWidth={location.pathname.startsWith('/integrations') ? 2.5 : 2}
             />
             <span className="text-[10px] font-bold tracking-wide">Integración</span>
+          </button>
+
+          <button
+            onClick={() => navigate('/policies')}
+            className={cn(
+              "group flex w-full flex-col items-center justify-center gap-1 rounded-2xl p-3 transition-all duration-300",
+              location.pathname.startsWith('/policies')
+                ? "bg-primary/10 text-primary shadow-glow-sm"
+                : "text-muted-foreground hover:bg-surface hover:text-foreground"
+            )}
+            title="Políticas Oficiales y Normas de YouTube"
+          >
+            <ShieldCheck
+              className={cn(
+                "h-6 w-6 transition-transform duration-300 group-hover:scale-110",
+                location.pathname.startsWith('/policies') ? "text-primary" : "text-muted-foreground"
+              )}
+              strokeWidth={location.pathname.startsWith('/policies') ? 2.5 : 2}
+            />
+            <span className="text-[10px] font-bold tracking-wide">Políticas</span>
           </button>
         </nav>
       </div>

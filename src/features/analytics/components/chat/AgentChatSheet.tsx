@@ -33,7 +33,9 @@ const STORAGE_KEY = "magicaescocia_agent_chat_history";
 const SUGGESTED_PROMPTS = [
     { label: "🔮 ¿Qué Short publicar mañana?", query: "¿Qué temática y ángulo de Short me recomiendas publicar mañana basándote en los videos que mejor funcionaron en mi canal?" },
     { label: "⚡ 3 Ganchos Magnéticos", query: "Dame 3 ganchos irresistibles (primeros 3 segundos) para un Short sobre una leyenda oscura escocesa." },
-    { label: "📊 Analizar mis videos top", query: "¿Qué patrones en común tienen mis Shorts con mayor retención y cómo puedo replicarlos?" },
+    { label: "🛡️ Copyright y Música", query: "¿Puedo usar fragmentos de canciones comerciales en mis Shorts sin recibir strikes ni perder monetización?" },
+    { label: "🤖 Etiqueta de Contenido IA", query: "¿Cuándo es obligatorio marcar la casilla de contenido sintético o generado por IA según las normas de YouTube?" },
+    { label: "⚠️ Contenido Reutilizado", query: "¿Cómo proteger mi canal de desmonetización por 'Contenido Reutilizado' si uso imágenes de archivo o generadas por IA?" },
     { label: "🔄 Guion en bucle (Loop)", query: "Escribe un guion de 20 segundos con técnica de bucle infinito (loop) sobre los castillos embrujados de Escocia." }
 ];
 
@@ -48,7 +50,7 @@ export function AgentChatSheet() {
             {
                 id: "welcome",
                 role: "assistant",
-                content: "Hola. Soy tu **Estratega IA** para el canal. Conozco tu ADN editorial, tus pilares de historia y misterio, y qué Shorts te han traído más retención. ¿Qué quieres planificar o analizar hoy?",
+                content: "Hola. Soy tu **Estratega y Asesor de Políticas IA** para el canal. Conozco tu ADN editorial, tus métricas clave y las **políticas oficiales de YouTube** (copyright, fair use, monetización, contenido IA y buenas prácticas de Shorts). ¿En qué puedo orientarte o qué Short planificamos hoy?",
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             }
         ];
@@ -58,6 +60,19 @@ export function AgentChatSheet() {
     const [loading, setLoading] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleOpenChat = (e: any) => {
+            setOpen(true);
+            if (e.detail?.query) {
+                setTimeout(() => {
+                    handleSendMessage(e.detail.query);
+                }, 100);
+            }
+        };
+        window.addEventListener('open-agent-chat', handleOpenChat);
+        return () => window.removeEventListener('open-agent-chat', handleOpenChat);
+    }, []);
 
     useEffect(() => {
         try {

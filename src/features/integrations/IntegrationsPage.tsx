@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Integration } from "@/features/integrations/types";
 import { integrationsApi } from "@/lib/api/integrations";
 import { IntegrationCard } from "./components/IntegrationCard";
-import { GeminiBYOKForm } from "./components/GeminiBYOKForm";
+import { AIStatusCard } from "./components/AIStatusCard";
 import { Chrome, ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -39,10 +39,10 @@ export default function IntegrationsPage() {
             
             <div className="flex flex-col gap-1">
                 <h1 className="text-4xl font-black tracking-tight bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-                    Integraciones
+                    Integraciones & Motores
                 </h1>
                 <p className="text-muted-foreground">
-                    Conecta tus cuentas para desbloquear funciones avanzadas.
+                    Conexiones y servicios de inteligencia activos en tu cuenta.
                 </p>
             </div>
 
@@ -58,11 +58,11 @@ export default function IntegrationsPage() {
                         title="Cuenta de Google / YouTube"
                         description="Conecta YouTube para analizar tus estadísticas reales de retención, alcancé y crecimiento."
                         icon={<Chrome className="h-6 w-6 text-blue-600" />}
-                        integration={integrations.find((i) => i.platform === "google")}
+                        integration={integrations.find((i) => i.platform === "google" || i.platform === "youtube")}
                         onStatusChange={fetchIntegrations}
                     />
 
-                    <GeminiBYOKForm />
+                    <AIStatusCard />
                 </div>
             )}
         </div>

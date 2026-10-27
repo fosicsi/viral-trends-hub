@@ -21,7 +21,11 @@ dist-ssr
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
 .env
 .vercel
 .env*.local
+Drift/
+test_db.js
+supabase/.temp/
+
+

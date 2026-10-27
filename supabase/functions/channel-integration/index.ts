@@ -152,7 +152,8 @@ Deno.serve(async (req) => {
             const state = btoa(JSON.stringify({ platform, userId: user.id, nonce: Math.random() }));
 
             // Force consent and offline access to guarantee a refresh token
-            const finalPrompt = prompt.includes('consent') ? prompt : `${prompt} consent`;
+            const promptStr = String(prompt || 'select_account consent');
+            const finalPrompt = promptStr.includes('consent') ? promptStr : `${promptStr} consent`;
 
             const authUrl = `${GOOGLE_AUTH_URL}?client_id=${clientId}&redirect_uri=${encodeURIComponent(finalRedirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}&access_type=offline&prompt=${encodeURIComponent(finalPrompt)}&state=${state}`;
 
@@ -195,12 +196,17 @@ Deno.serve(async (req) => {
             )
 
             // Preserve existing metadata (like channel_id)
-            const { data: existingIntegration } = await supabaseAdmin
+            const { data: existingIntegrations } = await supabaseAdmin
                 .from('user_integrations')
                 .select('metadata, refresh_token')
                 .eq('user_id', user.id)
-                .eq('platform', platform)
-                .single();
+                .in('platform', [platform, 'google', 'youtube'])
+                .order('updated_at', { ascending: false });
+
+            const existingIntegration = existingIntegrations?.[0];
+            const cleanMetadata = { ...(existingIntegration?.metadata || {}) };
+            delete cleanMetadata.auth_error;
+            delete cleanMetadata.auth_error_at;
 
             const payload: any = {
                 user_id: user.id,
@@ -208,7 +214,7 @@ Deno.serve(async (req) => {
                 access_token: encryptedAccessToken,
                 expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
                 scopes: tokenData.scope?.split(" ") || [],
-                metadata: existingIntegration?.metadata || {},
+                metadata: cleanMetadata,
                 updated_at: new Date().toISOString()
             };
 
@@ -218,6 +224,13 @@ Deno.serve(async (req) => {
                 // Keep the old refresh_token if Google didn't send a new one
                 payload.refresh_token = existingIntegration.refresh_token;
             }
+
+            // Remove any old conflicting rows for this user across 'google' and 'youtube'
+            await supabaseAdmin
+                .from('user_integrations')
+                .delete()
+                .eq('user_id', user.id)
+                .neq('platform', platform);
 
             const { error: upsertError } = await supabaseAdmin
                 .from('user_integrations')
@@ -259,11 +272,30 @@ Deno.serve(async (req) => {
         if (action === 'status') {
             const { data, error } = await supabaseClient
                 .from('user_integrations')
-                .select('platform, created_at, updated_at, scopes, metadata')
+                .select('platform, created_at, updated_at, expires_at, scopes, metadata, refresh_token')
                 .eq('user_id', user.id);
 
             if (error) throw error;
-            return new Response(JSON.stringify({ data }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
+
+            const nowMs = Date.now();
+            const formatted = (data || []).map((item: any) => {
+                const isRevoked = item.metadata?.auth_error === 'AUTH_REVOKED';
+                const hasRefreshToken = Boolean(item.refresh_token);
+                const isExpired = isRevoked || (!hasRefreshToken && item.expires_at ? new Date(item.expires_at).getTime() < nowMs : false);
+                return {
+                    platform: item.platform,
+                    created_at: item.created_at,
+                    updated_at: item.updated_at,
+                    expires_at: item.expires_at,
+                    scopes: item.scopes,
+                    metadata: item.metadata,
+                    connectedAt: item.created_at,
+                    isExpired,
+                    authError: item.metadata?.auth_error || null
+                };
+            });
+
+            return new Response(JSON.stringify({ data: formatted }), { headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
         }
 
         // 4. STATS (YouTube) - Cache-First Strategy
@@ -301,14 +333,14 @@ Deno.serve(async (req) => {
 
             // 2. FALLBACK: Fetch from YouTube API if cache miss or expired
             // Fetch integration with Token and Expiration
-            const { data: integration, error: dbError } = await supabaseAdmin
+            const { data: integrations, error: dbError } = await supabaseAdmin
                 .from('user_integrations')
                 .select('access_token, refresh_token, expires_at, platform, metadata')
                 .eq('user_id', user.id)
                 .in('platform', [platform, 'google', 'youtube'])
-                .order('updated_at', { ascending: false })
-                .limit(1)
-                .single();
+                .order('updated_at', { ascending: false });
+
+            const integration = integrations?.find((i: any) => i.refresh_token && i.metadata?.auth_error !== 'AUTH_REVOKED') || integrations?.[0];
 
             if (dbError || !integration) {
                 return new Response(JSON.stringify({ error: "Not connected" }), { status: 404, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
@@ -350,6 +382,12 @@ Deno.serve(async (req) => {
                 const refreshData = await refreshRes.json();
 
                 if (refreshData.error === 'invalid_grant') {
+                    await supabaseAdmin
+                        .from('user_integrations')
+                        .update({ metadata: { ...((integration.metadata as any) || {}), auth_error: 'AUTH_REVOKED', auth_error_at: new Date().toISOString() } })
+                        .eq('user_id', user.id)
+                        .eq('platform', integration.platform);
+
                     return new Response(JSON.stringify({ error: "AUTH_REVOKED", message: "Token expired or revoked." }), { status: 401, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
                 }
 
@@ -511,14 +549,14 @@ Deno.serve(async (req) => {
             }
 
             // 2. FETCH FROM API
-            const { data: integration } = await supabaseAdmin
+            const { data: integrations } = await supabaseAdmin
                 .from('user_integrations')
                 .select('access_token, refresh_token, expires_at, platform, metadata')
                 .eq('user_id', user.id)
                 .in('platform', [platform, 'google', 'youtube'])
-                .order('updated_at', { ascending: false })
-                .limit(1)
-                .single();
+                .order('updated_at', { ascending: false });
+
+            const integration = integrations?.find((i: any) => i.refresh_token && i.metadata?.auth_error !== 'AUTH_REVOKED') || integrations?.[0];
 
             if (!integration) {
                 return new Response(JSON.stringify({ error: "Not connected" }), { status: 404, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
@@ -774,7 +812,14 @@ Deno.serve(async (req) => {
             }
 
             // Fetch Integration
-            const { data: integration } = await supabaseAdmin.from('user_integrations').select('access_token, refresh_token, expires_at, platform, metadata').eq('user_id', user.id).in('platform', [platform, 'google', 'youtube']).order('updated_at', { ascending: false }).limit(1).single();
+            const { data: integrations } = await supabaseAdmin
+                .from('user_integrations')
+                .select('access_token, refresh_token, expires_at, platform, metadata')
+                .eq('user_id', user.id)
+                .in('platform', [platform, 'google', 'youtube'])
+                .order('updated_at', { ascending: false });
+
+            const integration = integrations?.find((i: any) => i.refresh_token && i.metadata?.auth_error !== 'AUTH_REVOKED') || integrations?.[0];
             if (!integration) return new Response(JSON.stringify({ error: "Not connected" }), { status: 404, headers: dynamicCorsHeaders });
 
             const encryptionKey = Deno.env.get("OAUTH_ENCRYPTION_KEY") || "default-insecure-key";
@@ -794,6 +839,12 @@ Deno.serve(async (req) => {
                     });
                     const refreshData = await refreshRes.json();
                     if (refreshData.error === 'invalid_grant') {
+                        await supabaseAdmin
+                            .from('user_integrations')
+                            .update({ metadata: { ...((integration.metadata as any) || {}), auth_error: 'AUTH_REVOKED', auth_error_at: new Date().toISOString() } })
+                            .eq('user_id', user.id)
+                            .eq('platform', integration.platform);
+
                         return new Response(JSON.stringify({ error: "AUTH_REVOKED", message: "Token expired or revoked." }), { status: 401, headers: { ...dynamicCorsHeaders, 'Content-Type': 'application/json' } });
                     }
                     if (refreshData.access_token) {

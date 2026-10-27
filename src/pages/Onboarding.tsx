@@ -89,6 +89,26 @@ export default function Onboarding() {
 
             if (error) throw error;
 
+            // Sincronizar simultáneamente user_metadata y user_channel_identities
+            await Promise.allSettled([
+                supabase.auth.updateUser({
+                    data: {
+                        niche_keywords: [profile.niche],
+                        niche_format: 'mix'
+                    }
+                }),
+                supabase.from('user_channel_identities' as any).upsert({
+                    user_id: user.id,
+                    identity_profile: {
+                        tema_principal: profile.niche,
+                        estilo: profile.goals,
+                        publico_objetivo: profile.experience_level,
+                        formato_dominante: 'Shorts y Videos Largos'
+                    },
+                    last_learned_at: new Date().toISOString()
+                }, { onConflict: 'user_id' })
+            ]);
+
             toast.success("¡Perfil creado con éxito!");
             navigate('/');
         } catch (error) {

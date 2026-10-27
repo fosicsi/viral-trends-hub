@@ -6,6 +6,8 @@ export interface Integration {
   scopes: string[];
   metadata: Record<string, any>;
   connectedAt: string;
+  isExpired?: boolean;
+  authError?: string | null;
 }
 
 export interface IntegrationStatus {

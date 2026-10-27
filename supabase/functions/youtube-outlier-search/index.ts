@@ -1,6 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { crypto } from "https://deno.land/std@0.208.0/crypto/mod.ts";
-import { decodeHex } from "https://deno.land/std@0.208.0/encoding/hex.ts";
+import { getValidGoogleToken } from "../_shared/google-tokens.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -8,70 +6,6 @@ const corsHeaders = {
         "authorization, x-client-info, apikey, content-type, x-supabase-client-platform",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-
-// --- AUTH & CRYPTO HELPERS ---
-
-async function getMainKey(secret: string): Promise<CryptoKey> {
-    const encoder = new TextEncoder();
-    const keyBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(secret));
-    return await crypto.subtle.importKey(
-        "raw",
-        keyBuffer,
-        { name: "AES-GCM" },
-        false,
-        ["encrypt", "decrypt"]
-    );
-}
-
-async function decrypt(hexStr: string, secret: string): Promise<string> {
-    const data = decodeHex(hexStr);
-    const iv = data.slice(0, 12);
-    const ciphertext = data.slice(12);
-    const key = await getMainKey(secret);
-
-    const decrypted = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: iv },
-        key,
-        ciphertext
-    );
-    return new TextDecoder().decode(decrypted);
-}
-
-async function getUserGoogleToken(req: Request): Promise<string | null> {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) return null;
-
-    try {
-        const supabaseAdmin = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        );
-
-        const supabaseClient = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-            { global: { headers: { Authorization: authHeader } } }
-        );
-
-        const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-        if (userError || !user) return null;
-
-        const { data: integration, error: dbError } = await supabaseAdmin
-            .from('user_integrations')
-            .select('access_token')
-            .eq('user_id', user.id)
-            .eq('platform', 'google')
-            .maybeSingle();
-
-        if (dbError || !integration) return null;
-
-        const encryptionKey = Deno.env.get("OAUTH_ENCRYPTION_KEY") || "default-insecure-key";
-        return await decrypt(integration.access_token, encryptionKey);
-    } catch (e) {
-        console.error("Error fetching user token:", e);
-        return null;
-    }
-}
 
 function parseDuration(iso: string): number {
     const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
@@ -95,8 +29,10 @@ function toDurationString(totalSeconds: number): string {
 }
 
 function getScoreLabel(score: number): string {
+    if (score >= 5) return "Super Viral";
     if (score >= 3) return "Viral";
-    if (score >= 1) return "Good";
+    if (score >= 1.5) return "Good";
+    if (score >= 1) return "Average";
     return "Normal";
 }
 
@@ -104,13 +40,13 @@ Deno.serve(async (req) => {
     if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
     try {
-        const userToken = await getUserGoogleToken(req);
+        const { accessToken: userToken } = await getValidGoogleToken(req);
         const serverKey = Deno.env.get("YOUTUBE_API_KEY");
         const useOAuth = !!userToken;
         const apiKey = userToken || serverKey;
 
         if (!apiKey) {
-            throw new Error("No YouTube API credentials found");
+            throw new Error("No YouTube API credentials found (neither user OAuth token nor server API key)");
         }
 
         const authHeader: HeadersInit = useOAuth ? { "Authorization": `Bearer ${apiKey}` } : {};
@@ -119,16 +55,16 @@ Deno.serve(async (req) => {
         const body = await req.json().catch(() => ({}));
         const query = String(body?.query ?? "").trim() || "viral ideas";
         const formatType = body?.format === "shorts" ? "shorts" : "longform";
-        const maxResults = 12; // Zero Waste Economy limit
+        const maxResults = 25; // Fetch enough candidates so filtering leaves 10-15 results
 
-        console.log(`🔎 Buscando Outliers: "${query}" | Format: ${formatType}`);
+        console.log(`🔎 Buscando Outliers: "${query}" | Format: ${formatType} | OAuth: ${useOAuth}`);
 
         // FORMAT CONFIG
         let searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&order=relevance&type=video&maxResults=${maxResults}&q=${encodeURIComponent(query)}${authQuery}`;
         if (formatType === "shorts") {
             searchUrl += "&videoDuration=short";
         } else {
-            searchUrl += "&videoDuration=medium"; // API accepts short, medium, long. We use medium/long for longform, let's omit for broader reach or use medium. Using nothing might bring shorts back, so let's just stick to nothing but filter in TS.
+            searchUrl += "&videoDuration=medium";
         }
 
         // 1. BATCH SEARCH
@@ -168,7 +104,7 @@ Deno.serve(async (req) => {
             videoStatsMap.set(v.id, v);
         });
 
-        // 3. BATCH CHANNELS (Statistics for subscribers)
+        // 3. BATCH CHANNELS (Statistics for subscribers & video counts)
         const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${channelIds.join(",")}${authQuery}`;
         const channelsRes = await fetch(channelsUrl, { headers: authHeader });
         const channelsData = await channelsRes.json();
@@ -178,7 +114,7 @@ Deno.serve(async (req) => {
             channelStatsMap.set(c.id, c.statistics);
         });
 
-        // 4. MAP AND CALCULATE SCORE (Zero Waste Analytics)
+        // 4. MAP AND CALCULATE SCORE
         const results = items.map((item: any) => {
             const vId = item.id.videoId;
             const cId = item.snippet.channelId;
@@ -189,14 +125,16 @@ Deno.serve(async (req) => {
 
             const views = Number(vStats.statistics?.viewCount || 0);
             const subsRaw = Number(cStats.subscriberCount || 0);
-            // Fallback subs to prevent Infinity rating
-            const subs = subsRaw > 0 ? subsRaw : Math.max(1, Math.floor(views / 100));
+            const totalChannelViews = Number(cStats.viewCount || 0);
+            const channelVideoCount = Math.max(1, Number(cStats.videoCount || 1));
+            const calculatedAvgViews = Math.round(totalChannelViews / channelVideoCount);
 
+            // Baseline for ratio: use subs or average views
+            const baseline = subsRaw > 0 ? subsRaw : Math.max(1, calculatedAvgViews);
             const durSeconds = parseDuration(String(vStats.contentDetails?.duration || "PT0S"));
             const durationString = toDurationString(durSeconds);
 
-            // Simple Outlier score calculation
-            let outlierScore = Number((views / subs).toFixed(1));
+            const outlierScore = Number((views / Math.max(1, baseline)).toFixed(1));
 
             return {
                 id: vId,
@@ -205,9 +143,10 @@ Deno.serve(async (req) => {
                 duration: durationString,
                 channelName: item.snippet.channelTitle,
                 channelSubscribers: subsRaw,
-                publishedAt: new Date(item.snippet.publishedAt).toLocaleDateString(), // simplified relative time or short date
+                // Pass ISO 8601 string so client new Date() works predictably in all browsers/locales
+                publishedAt: item.snippet.publishedAt,
                 views: views,
-                avgViews: subs, // simple proxy for average channel views
+                avgViews: calculatedAvgViews,
                 outlierScore: outlierScore,
                 scoreLabel: getScoreLabel(outlierScore),
                 format: formatType,
@@ -215,7 +154,7 @@ Deno.serve(async (req) => {
             };
         }).filter(Boolean);
 
-        // Filter by actual duration if "longform" was chosen to ensure no shorts slip by
+        // Filter by actual duration
         let finalResults = results;
         if (formatType === "longform") {
             finalResults = results.filter((r: any) => r._durSeconds > 60);
@@ -223,7 +162,7 @@ Deno.serve(async (req) => {
             finalResults = results.filter((r: any) => r._durSeconds <= 60);
         }
 
-        // Sort by Outlier Score (Relevance proxy)
+        // Sort by Outlier Score
         finalResults.sort((a: any, b: any) => b.outlierScore - a.outlierScore);
 
         // Clean internal props
@@ -240,7 +179,7 @@ Deno.serve(async (req) => {
         const msg = e instanceof Error ? e.message : "Unexpected error in outlier edge function";
         console.error("Critical error:", msg);
         return new Response(JSON.stringify({ success: false, error: msg }), {
-            status: 200, // Return 200 so frontend can handle `success: false` pattern
+            status: 200,
             headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
     }

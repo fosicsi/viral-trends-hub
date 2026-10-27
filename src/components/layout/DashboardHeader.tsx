@@ -1,4 +1,4 @@
-import { Bell, Search, Menu, LogOut, User, Key, Sun, Moon, HelpCircle, Wifi, WifiOff, ArrowLeft, Plug } from "lucide-react";
+import { Bell, Search, Menu, LogOut, User, Key, Sun, Moon, HelpCircle, Wifi, WifiOff, ArrowLeft, Plug, ShieldCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -76,6 +76,17 @@ export function DashboardHeader({
             </div>
 
             <div className="flex items-center gap-3 sm:gap-4">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate('/policies')}
+                    className="hidden sm:flex items-center gap-1.5 text-xs font-semibold rounded-xl border-border/80 hover:bg-emerald-500/10 hover:border-emerald-500/40 hover:text-emerald-500 transition-all"
+                    title="Políticas oficiales de YouTube y Cumplimiento"
+                >
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>Políticas</span>
+                </Button>
+
                 <Button
                     variant="outline"
                     size="sm"

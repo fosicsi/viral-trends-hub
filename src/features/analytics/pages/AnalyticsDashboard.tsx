@@ -20,6 +20,7 @@ import { Sparkles, Settings2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { ChannelDNAPanel } from "../components/channel/ChannelDNAPanel";
 import { OwnShortsAnalysis } from "../components/channel/OwnShortsAnalysis";
+import { CatalogRevampCard } from "../components/channel/CatalogRevampCard";
 import { AgentChatSheet } from "../components/chat/AgentChatSheet";
 
 export default function AnalyticsDashboard() {
@@ -246,6 +247,11 @@ export default function AnalyticsDashboard() {
                             </div>
                         </div>
                     )}
+
+                    {/* Fila Rescate de Catálogo (Made on YouTube 2026) */}
+                    <div className="w-full">
+                        <CatalogRevampCard />
+                    </div>
 
                     {/* Fila Inferior: Plan de Acción de Ancho Completo */}
                     <div className="w-full">

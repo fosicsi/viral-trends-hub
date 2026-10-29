@@ -46,7 +46,16 @@ Deno.serve(async (req) => {
 
         const userApiKey = await getUserApiKey(supabaseAdmin, user.id, 'gemini');
 
-        const { recommendation, customTone, customLength, customHookType } = await req.json().catch(() => ({}));
+        const { 
+            recommendation, 
+            customTone, 
+            customLength, 
+            customHookType,
+            projectType = "single_short", // "single_short" | "serial_series" | "non_serial_series"
+            sponsorProduct = null, // string | null (e.g. "NordVPN" or affiliate link)
+            episodeNumber = 1,
+            totalEpisodes = 1
+        } = await req.json().catch(() => ({}));
 
         if (!recommendation) {
             return new Response(JSON.stringify({ error: 'Missing recommendation payload' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -66,18 +75,28 @@ Deno.serve(async (req) => {
             .maybeSingle();
 
         const ip = identity?.identity_profile || {};
-        const channelName = ip.canal || "@magicaescocia";
-        const channelTopic = recommendation.niche || ip.pilares || ip.tema_principal || creatorProfile?.niche || "Historia y Misterio de Escocia";
-        const channelStyle = customTone || ip.tono || "Narrador omnisciente, dramático, frases cortas, misterioso";
-        const targetAudience = ip.publico_objetivo || "Amantes de la historia, mitología celta y leyendas oscuras";
+        const channelName = ip.canal || creatorProfile?.channel_name || "Tu Canal";
+        const channelTopic = recommendation.niche || ip.pilares || ip.tema_principal || creatorProfile?.niche || "Misterios, Historia y Curiosidades";
+        const channelStyle = customTone || ip.tono || "Narrador percutante, cinematográfico, directo, frases cortas";
+        const targetAudience = ip.publico_objetivo || "Audiencia de Shorts que busca intriga, historias reveladoras y datos fascinantes";
         const targetDuration = customLength || ip.duracion_objetivo || "20-30s";
         const hookType = customHookType || ip.gancho_favorito || "Pregunta retórica";
 
-        // 2. Obtener videos top del canal para incorporar el ADN de éxito real
+        // 2. Traer políticas oficiales para Grounding
+        const { data: policyRules } = await supabaseAdmin
+            .from('youtube_policy_rules')
+            .select('title, risk_level, summary')
+            .limit(10);
+
+        const policyGroundingText = policyRules && policyRules.length > 0
+            ? policyRules.map((r: any) => `- [${r.risk_level.toUpperCase()}] ${r.title}: ${r.summary}`).join('\n')
+            : "Políticas vigentes de YouTube Shorts.";
+
+        // 3. Obtener videos top del canal para contexto de éxito
         let topVideosContext = "";
         const { data: channelRow } = await supabaseAdmin
             .from('youtube_channels')
-            .select('id')
+            .select('id, channel_title')
             .eq('user_id', user.id)
             .order('updated_at', { ascending: false })
             .limit(1)
@@ -88,7 +107,7 @@ Deno.serve(async (req) => {
                 .from('video_metadata')
                 .select('title, video_metrics(view_count)')
                 .eq('channel_id', channelRow.id)
-                .limit(40);
+                .limit(30);
                 
             if (vids && vids.length > 0) {
                 const sortedVids = vids
@@ -101,108 +120,170 @@ Deno.serve(async (req) => {
                     .map(v => `"${v.title}" (${v.views.toLocaleString()} vistas)`);
 
                 if (sortedVids.length > 0) {
-                    topVideosContext = `HISTORIAL DE ÉXITO EN ESTE CANAL (mantener este calibre de intriga y ritmo): ${sortedVids.join(", ")}`;
+                    topVideosContext = `HISTORIAL DE VIDEOS CON MAYOR RETENCIÓN: ${sortedVids.join(", ")}`;
                 }
             }
         }
 
-        // 3. Calibración temporal estricta según la duración del ADN
-        let wordTarget = "55-75 palabras";
-        let targetSecondsText = "20 a 25 segundos";
-        let structureGuideline = `
-- Bloque 1 (0s-3s): GANCHO VISCERAL (${hookType}). La primera frase debe cortar la respiración y frenar el swipe de golpe.
-- Bloque 2 (3s-9s): TENSIÓN Y PREMISA. Plantea el misterio o hecho contraintuitivo sin rodeos ni saludos.
-- Bloque 3 (9s-20s): EL NÚCLEO DE LA REVELACIÓN. El dato histórico o giro siniestro explicado con frases percutantes.
-- Bloque 4 (20s-24s): REMATE EN BUCLE (LOOP). La última frase debe enlazar gramaticalmente con la primera para crear un bucle infinito que duplique reproducciones.`;
+        // 4. Lógica Fina según Tipo de Proyecto (Made on YouTube 2026: Series de Shorts)
+        const isSerial = projectType === "serial_series";
+        const isNotLastEpisode = isSerial && episodeNumber < totalEpisodes;
+        const closingMechanicType = isNotLastEpisode ? "series_binge_trigger" : "seamless_loop";
 
-        if (targetDuration === "15-20s") {
-            wordTarget = "40-50 palabras";
-            targetSecondsText = "15 a 18 segundos";
-            structureGuideline = `
-- Bloque 1 (0s-3s): GANCHO EXPLOSIVO (${hookType}). Entrada directa sin respiro.
-- Bloque 2 (3s-14s): LA REVELACIÓN CONDENSADA. La verdad oculta en 2 frases demoledoras.
-- Bloque 3 (14s-17s): REMATE Y BUCLE (LOOP). Conecta de inmediato con el inicio.`;
-        } else if (targetDuration === "30-60s") {
-            wordTarget = "110-130 palabras";
-            targetSecondsText = "45 a 55 segundos";
-            structureGuideline = `
-- Bloque 1 (0s-4s): GANCHO VISCERAL (${hookType}).
-- Bloque 2 (4s-15s): CONTEXTO HISTÓRICO Y LEYENDA.
-- Bloque 3 (15s-38s): DESARROLLO DEL MISTERIO / HECHOS OCULTOS.
-- Bloque 4 (38s-48s): CLÍMAX Y EVIDENCIA.
-- Bloque 5 (48s-52s): CIERRE MEMORABLE Y LLAMADO / LOOP.`;
-        }
+        const closingGuideline = closingMechanicType === "series_binge_trigger"
+            ? `MODO BINGE TRIGGER (Episodio ${episodeNumber} de ${totalEpisodes}): Desactiva el loop infinito clásico. En los últimos 2 segundos crea un suspenso brutal (cliffhanger) que dirija explícitamente la atención al botón nativo de YouTube 'Mirar la serie' para ver el siguiente episodio.`
+            : `MODO SEAMLESS LOOP: La última frase hablada DEBE encajar gramatical y rítmicamente con la primera frase del gancho de modo que el video se reinicie sin que el espectador note el corte.`;
 
-        // =====================================================
-        // PROMPT PERSONALIZADO PARA @MAGICAESCOCIA
-        // =====================================================
-        const producerPrompt = `Eres el Guionista Principal y Director de Contenido para el canal de YouTube "${channelName}".
+        const sponsorGuideline = sponsorProduct
+            ? `INTEGRACIÓN DE MARCA/AFILIADO DETECTADA ("${sponsorProduct}"): Inserta un micro-bridge nativo de exactamente 3 a 4 segundos entre el segundo 12 y 16 (mitad del Short). NUNCA al principio (para no arruinar el VVS) ni al final (para no romper el cierre).`
+            : `Sin patrocinio externo: Enfoque 100% orgánico en retención.`;
+
+        // 5. System Prompt Profesional
+        const producerPrompt = `Eres el Director de Guiones y Productor Ejecutivo especializado en YouTube Shorts para el canal "${channelName}".
 Nicho y Pilares: "${channelTopic}".
 Tono de voz obligatorio: "${channelStyle}".
-Tipo de gancho comprobado: "${hookType}".
-Público objetivo: "${targetAudience}".
+Tipo de Gancho preferido: "${hookType}".
+Público Objetivo: "${targetAudience}".
 ${topVideosContext ? `\n${topVideosContext}\n` : ''}
+
+## BASE NORMATIVA DE YOUTUBE APLICABLE:
+${policyGroundingText}
+
 ---
 
-## OBJETIVO: GUION DE SHORT PARA RETENCIÓN EXTREMA
-- Duración Exacta: ${targetSecondsText} (Límite estricto: ${wordTarget}).
-- Prohibido cualquier saludo o relleno ("Hola a todos", "En este video", "Bienvenidos"). Entra de golpe en el segundo 0.
-- Escribe para el oído: oraciones directas, vocabulario sugerente, ritmo implacable.
-- Técnica de Bucle Infinito (Loop): La última frase hablada DEBE conectarse de forma fluida y natural con la primera frase del gancho.
+## ESPECIFICACIONES TÉCNICAS (MADE ON YOUTUBE 2026):
+1. Tipo de Proyecto: "${projectType}" (Episodio ${episodeNumber} de ${totalEpisodes}).
+2. Duración Objetivo: 20 a 25 segundos (Límite estricto: 55 a 75 palabras de locución).
+3. Pacing Visual: La imagen debe cambiar cada 2.5 a 3.5 segundos (exactamente 7 a 8 bloques numerados).
+4. Safe Zone de Miniaturas: Todos los elementos visuales clave y textos (máximo 4-5 palabras) deben situarse en el 70% central del encuadre para no ser tapados por la interfaz nativa móvil de Shorts.
+5. ${closingGuideline}
+6. ${sponsorGuideline}
 
 Tema a desarrollar: "${recommendation.niche || channelTopic}"
-Ángulo estratégico: "${recommendation.reasoning || ''}"
-Gancho sugerido: "${recommendation.titleSuggestions?.[0] || recommendation.niche}"
-Estrategia de retención: "${recommendation.retentionStrategy || 'Ritmo acelerado, cortes visuales continuos'}"
+Ángulo o premisa: "${recommendation.reasoning || recommendation.titleSuggestions?.[0] || channelTopic}"
 
 ---
 
-### ESTRUCTURA TEMPORAL (${targetSecondsText}):
-${structureGuideline}
-
----
-
-### REGLAS PARA PROMPTS VISUALES (Nanobanana y Google Flow):
-Todos los prompts visuales deben ser en INGLÉS, cinematográficos y 100% ambientados en la estética de "${channelName}":
-- Escocia mística, niebla espesa, castillos de piedra en ruinas, bosques oscuros, antorchas y luz de velas, tierras altas (Highlands), simbolismo celta ancestral, atmósfera oscura y cinematográfica.
-- Parámetros: 8k photorealistic, cinematic moody lighting, volumetric fog, anamorphic lens, historical authenticity, Unreal Engine 5 aesthetic.
-
----
-
-### DEVUELVE ÚNICAMENTE ESTE FORMATO JSON (sin texto adicional fuera del JSON):
+### DEVUELVE EXCLUSIVAMENTE UN OBJETO JSON VÁLIDO CON ESTE CONTRATO EXACTO:
 {
-    "metadata": {
-        "channel": "${channelName}",
-        "estimatedDuration": "${targetSecondsText}",
-        "targetWords": "${wordTarget}",
-        "toneUsed": "${channelStyle}",
-        "hookFormula": "${hookType}"
+  "project_type": "${projectType}",
+  "target_duration_seconds": 24,
+  "word_count": 68,
+  "compliance_check": {
+    "risk_level": "SAFE",
+    "synthetic_media_disclosure_required": true,
+    "voice_likeness_warning": false,
+    "reused_content_transformation_score": 95,
+    "policy_notes": "Aprobado para monetización YPP. Requiere marcar casilla de contenido alterado si se usa avatar o voz sintética realista."
+  },
+  "ab_test_hooks": [
+    {
+      "variant": "A",
+      "angle": "Impacto Visual / Acción",
+      "spoken_text_0_to_3s": "Primera frase visceral de 0 a 3 segundos",
+      "google_flow_prompt": "Cinematic 3s dynamic camera movement prompt in English",
+      "nanobanana_prompt": "High detail 9:16 portrait prompt in English --ar 9:16 --safe-zone center-70"
     },
-    "scriptSections": [
-        { "timestamp": "0s-3s", "visual": "[Corte rápido / Texto grande en pantalla] Descripción de la toma", "audio": "Locución exacta del locutor" },
-        { "timestamp": "3s-9s", "visual": "[B-roll oscuro y dinámico] Descripción visual", "audio": "Locución de la premisa" },
-        { "timestamp": "9s-20s", "visual": "[Primer plano dramático / Detalle histórico] Descripción", "audio": "Locución de la revelación" },
-        { "timestamp": "20s-24s", "visual": "[Toma final impactante] Descripción de cierre", "audio": "Locución del remate conectado en loop" }
-    ],
-    "cleanScript": "Libreto completo corrido solo con el texto hablado con indicaciones entre corchetes (máximo ${wordTarget}).",
-    "loopConnection": "Explicación breve de cómo la última frase se conecta directamente con la primera para reiniciar el Short.",
-    "seo": {
-        "title": "TÍTULO VIRAL EN MAYÚSCULAS CON INTRIGA Y EMOJI (máx 55 caracteres)",
-        "description": "Descripción cautivadora de 2 líneas con palabras clave relevantes a ${channelName}.",
-        "hashtags": ["#shorts", "#${channelName.replace(/[@\\s]/g, '').toLowerCase()}", "#escocia", "#misterio", "#historia"],
-        "tags": "escocia, historia de escocia, mitología celta, leyendas escocesas, misterios antiguos"
+    {
+      "variant": "B",
+      "angle": "Curiosidad / Pregunta Retórica",
+      "spoken_text_0_to_3s": "Segunda frase alternativa con pregunta provocativa",
+      "google_flow_prompt": "Cinematic slow push-in shot prompt in English",
+      "nanobanana_prompt": "Atmospheric 9:16 portrait prompt in English --ar 9:16 --safe-zone center-70"
     },
-    "prompts": {
-        "nanobanana": [
-            "Detailed English prompt for HOOK image (atmospheric Scottish mist, photorealistic 8k, moody cinematic lighting)",
-            "Detailed English prompt for CORE MYSTERY image (ancient Scottish castle or celtic relic, torchlight, high detail)",
-            "Detailed English prompt for CLIMAX image (cinematic dramatic composition, shadows, volumetric fog)"
-        ],
-        "google_flow": [
-            "Detailed English video prompt for opening 3s slow dolly-in shot through heavy Scottish highlands fog",
-            "Detailed English video prompt for dramatic cinematic B-roll loop"
-        ]
+    {
+      "variant": "C",
+      "angle": "Contraste / Advertencia",
+      "spoken_text_0_to_3s": "Tercera frase alternativa con giro inesperado",
+      "google_flow_prompt": "Dramatic fast reveal prompt in English",
+      "nanobanana_prompt": "Dramatic contrast 9:16 portrait prompt in English --ar 9:16 --safe-zone center-70"
     }
+  ],
+  "script_blocks": [
+    {
+      "block_index": 1,
+      "timecode": "00:00 - 00:03",
+      "spoken_text": "Frase del gancho inicial",
+      "visual_direction": "Instrucción de edición y ritmo",
+      "nanobanana_image_prompt": "Detailed English image prompt --ar 9:16 --safe-zone center-70",
+      "google_flow_video_prompt": "Detailed English video prompt for 3s camera motion"
+    },
+    {
+      "block_index": 2,
+      "timecode": "00:03 - 00:06",
+      "spoken_text": "Planteamiento de la premisa",
+      "visual_direction": "Corte a detalle",
+      "nanobanana_image_prompt": "Detailed English prompt --ar 9:16 --safe-zone center-70",
+      "google_flow_video_prompt": "Detailed English video prompt"
+    },
+    {
+      "block_index": 3,
+      "timecode": "00:06 - 00:09",
+      "spoken_text": "Tensión creciente",
+      "visual_direction": "Cámara en movimiento lateral",
+      "nanobanana_image_prompt": "Detailed English prompt --ar 9:16 --safe-zone center-70",
+      "google_flow_video_prompt": "Detailed English video prompt"
+    },
+    {
+      "block_index": 4,
+      "timecode": "00:09 - 00:13",
+      "spoken_text": "El giro o revelación",
+      "visual_direction": "Primer plano dramático",
+      "nanobanana_image_prompt": "Detailed English prompt --ar 9:16 --safe-zone center-70",
+      "google_flow_video_prompt": "Detailed English video prompt"
+    },
+    {
+      "block_index": 5,
+      "timecode": "00:13 - 00:17",
+      "spoken_text": "Desarrollo del hecho central (o micro-bridge de marca si aplica)",
+      "visual_direction": "Toma atmosférica",
+      "nanobanana_image_prompt": "Detailed English prompt --ar 9:16 --safe-zone center-70",
+      "google_flow_video_prompt": "Detailed English video prompt"
+    },
+    {
+      "block_index": 6,
+      "timecode": "00:17 - 00:21",
+      "spoken_text": "Clímax del misterio o dato",
+      "visual_direction": "Ritmo acelerado",
+      "nanobanana_image_prompt": "Detailed English prompt --ar 9:16 --safe-zone center-70",
+      "google_flow_video_prompt": "Detailed English video prompt"
+    },
+    {
+      "block_index": 7,
+      "timecode": "00:21 - 00:24",
+      "spoken_text": "Frase de cierre conectada en bucle o binge trigger",
+      "visual_direction": "Toma de impacto final",
+      "nanobanana_image_prompt": "Detailed English prompt --ar 9:16 --safe-zone center-70",
+      "google_flow_video_prompt": "Detailed English video prompt"
+    }
+  ],
+  "closing_mechanic": {
+    "type": "${closingMechanicType}",
+    "last_sentence": "Última frase exacta del guion",
+    "first_sentence_connection": "Explicación exacta de cómo la última frase se une con la primera",
+    "loop_cohesion_score": 96
+  },
+  "dynamic_thumbnails_pack": {
+    "series_artwork_16_9_prompt": "High resolution 16:9 cinematic widescreen series banner for YouTube on Smart TVs and Search",
+    "episode_thumbnails_9_16": [
+      { "angle": "Emotional", "nanobanana_prompt": "Close-up emotional expression portrait prompt in English --ar 9:16 --safe-zone center-70", "overlay_text_max_5_words": "TEXTO CORTO EN MAYÚSCULAS" },
+      { "angle": "Curiosity", "nanobanana_prompt": "Curiosity driven anomaly or mysterious object prompt in English --ar 9:16 --safe-zone center-70", "overlay_text_max_5_words": "EL SECRETO OCULTO" },
+      { "angle": "Action", "nanobanana_prompt": "Dynamic narrative scene in progress prompt in English --ar 9:16 --safe-zone center-70", "overlay_text_max_5_words": "NADIE LO SABÍA" }
+    ]
+  },
+  "carousel_derivative_5_slides": [
+    { "slide": 1, "headline": "Título del carrusel", "nanobanana_prompt": "Cover image prompt in English --ar 9:16" },
+    { "slide": 2, "headline": "Punto 1", "nanobanana_prompt": "Slide 2 prompt in English --ar 9:16" },
+    { "slide": 3, "headline": "Punto 2", "nanobanana_prompt": "Slide 3 prompt in English --ar 9:16" },
+    { "slide": 4, "headline": "Punto 3", "nanobanana_prompt": "Slide 4 prompt in English --ar 9:16" },
+    { "slide": 5, "headline": "Conclusión", "nanobanana_prompt": "Slide 5 prompt in English --ar 9:16" }
+  ],
+  "cleanScript": "Locución completa corrida de las 55-75 palabras sin marcas de tiempo.",
+  "seo": {
+    "title": "TÍTULO VIRAL EN MAYÚSCULAS (MÁX 50 CARACTERES)",
+    "description": "Descripción cautivadora de 2 líneas optimizada para búsqueda.",
+    "hashtags": ["#shorts", "#${channelName.replace(/[@\\s]/g, '').toLowerCase()}", "#viral"]
+  }
 }`;
 
         const producerRes = await callWithCascade({ 
@@ -210,24 +291,44 @@ Todos los prompts visuales deben ser en INGLÉS, cinematográficos y 100% ambien
             customGeminiKey: userApiKey, 
             jsonMode: true, 
             temperature: 0.7, 
-            maxTokens: 6000 
+            maxTokens: 8192 
         });
 
         const aiResult = extractAndParseJSON(producerRes.text);
 
-        // Validación del resultado
-        if (!aiResult.scriptSections || !aiResult.cleanScript) {
+        // Validación y compatibilidad con formatos anteriores
+        if (!aiResult.script_blocks && !aiResult.scriptSections) {
             console.error("AI returned incomplete result:", JSON.stringify(aiResult).slice(0, 500));
             return new Response(JSON.stringify({ error: 'La IA devolvió un resultado incompleto. Intentá de nuevo.' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
-        // Asegurar metadata por si el modelo omitió algún campo
-        aiResult.metadata = aiResult.metadata || {
+        // Si faltan campos legacy, adaptamos desde los nuevos para retrocompatibilidad
+        if (!aiResult.scriptSections && aiResult.script_blocks) {
+            aiResult.scriptSections = aiResult.script_blocks.map((b: any) => ({
+                timestamp: b.timecode,
+                visual: b.visual_direction,
+                audio: b.spoken_text
+            }));
+        }
+
+        if (!aiResult.cleanScript && aiResult.script_blocks) {
+            aiResult.cleanScript = aiResult.script_blocks.map((b: any) => b.spoken_text).join(" ");
+        }
+
+        if (!aiResult.prompts) {
+            aiResult.prompts = {
+                nanobanana: aiResult.script_blocks?.map((b: any) => b.nanobanana_image_prompt) || [],
+                google_flow: aiResult.script_blocks?.map((b: any) => b.google_flow_video_prompt) || []
+            };
+        }
+
+        // Asegurar metadata tipada
+        aiResult.metadata = {
             channel: channelName,
-            estimatedDuration: targetSecondsText,
-            targetWords: wordTarget,
-            toneUsed: channelStyle,
-            hookFormula: hookType
+            projectType: aiResult.project_type || projectType,
+            targetDurationSeconds: aiResult.target_duration_seconds || 24,
+            wordCount: aiResult.word_count || (aiResult.cleanScript ? aiResult.cleanScript.split(/\s+/).length : 65),
+            closingMechanic: aiResult.closing_mechanic?.type || closingMechanicType
         };
 
         // Guardar en content_creation_plan

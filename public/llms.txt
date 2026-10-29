@@ -1,0 +1,34 @@
+# ViralTrends Hub (ViralTrends.ai)
+> Plataforma SaaS de Inteligencia Artificial para Creadores de YouTube Shorts
+
+## Resumen del Producto
+ViralTrends Hub es una suite integral diseñada para creadores y agencias de YouTube Shorts. Permite:
+1. Conectar canales de YouTube a través de la API oficial (OAuth2 / YouTube Analytics v3).
+2. Auditar métricas críticas de retención: ratio Viewed vs Swiped (VVS), retención a los 3 segundos y duración promedio de vista.
+3. Detectar temas y videos "Outliers" (videos que rinden 5x a 20x respecto al promedio del canal de origen) en cualquier nicho.
+4. Calibrar el ADN editorial del canal (tono de voz, público objetivo, formato dominante y duración óptima de 20-25 segundos).
+5. Generar guiones percutantes estructurados con la técnica de "Bucle Infinito" (Seamless Loop), donde la frase final conecta con el gancho inicial para forzar repeticiones de reproducción.
+6. Exportar paquetes de prompts visuales para motores de generación de imagen y video como Google Flow y Nanobanana.
+7. Cumplir estrictamente las políticas oficiales de YouTube (Copyright, Fair Use, Content ID vs Strikes, música comercial, declaración de IA sintética y protección contra desmonetización por contenido reutilizado).
+
+## Arquitectura y Módulos
+- **Landing Page Pública (`/`):** Presentación del producto, características, precios y accesos.
+- **Centro de Políticas de YouTube (`/policies`):** Base de datos relacional de directrices oficiales con semáforo de riesgo (Seguro, Precaución, Alto Riesgo, Crítico), listas de "Qué SÍ hacer" y "Qué NUNCA hacer", y asesoramiento directo con el Estratega IA.
+- **Dashboard de Analítica & ADN (`/dashboard` y `/analytics`):** Métricas en vivo del canal, análisis de videos propios más virales y panel de configuración de ADN.
+- **Creator Studio (`/studio`):** Taller de creación de guiones con estimador de duración (55-75 palabras), prompts visuales y ganchos alternativos.
+- **Detector de Outliers (`/outliers`):** Motor de búsqueda de oportunidades y tendencias aceleradas en YouTube Shorts.
+- **Integraciones (`/integrations`):** Conexión con Google / YouTube Analytics y gestión de proveedores de IA (Gemini, Claude, OpenAI).
+- **Autenticación & Onboarding (`/auth` y `/onboarding`):** Registro e inicio de sesión con Google OAuth o credenciales seguras.
+
+## Normas y Políticas de YouTube Integradas
+- **Copyright & Fair Use:** Transformación sustancial, crítica o comentario requeridos para ampararse en uso legítimo.
+- **Content ID vs Copyright Strikes:** Diferencia técnica entre reclamos monetarios (reparto de ingresos sin daño al canal) y faltas por copyright (3 faltas provocan cierre de cuenta).
+- **Música y Audio Comercial:** Restricciones de monetización para canciones comerciales en Shorts y uso de la Biblioteca de Audio de YouTube.
+- **Declaración de Contenido Sintético / IA:** Cuándo es obligatorio marcar la casilla de contenido alterado o generado por IA.
+- **Contenido Reutilizado (Reused Content):** Requisito de aportar voz original o edición narrativa para mantener la monetización del Programa de Socios de YouTube (YPP).
+- **Algoritmo de Shorts:** Maximización de retención en los primeros 3 segundos y ratio VVS superior al 75%.
+
+## Acceso y Contacto
+- URL de la aplicación: https://viral-trends-hub.vercel.app/
+- Acceso a Políticas: https://viral-trends-hub.vercel.app/policies
+- Iniciar Sesión / Registro: https://viral-trends-hub.vercel.app/auth

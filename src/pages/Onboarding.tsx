@@ -36,7 +36,7 @@ export default function Onboarding() {
                             .maybeSingle();
 
                         if (profileData) {
-                            navigate('/dashboard');
+                            navigate('/');
                         } else {
                             setStep(2);
                         }
@@ -110,7 +110,7 @@ export default function Onboarding() {
             ]);
 
             toast.success("¡Perfil creado con éxito!");
-            navigate('/dashboard');
+            navigate('/');
         } catch (error) {
             console.error("Error saving profile:", error);
             toast.error("Error al guardar el perfil");

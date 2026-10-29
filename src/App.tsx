@@ -20,7 +20,6 @@ const Profile = lazy(() => import("./pages/Profile"));
 const OutliersLayout = lazy(() => import("./features/outliers/layout/OutliersLayout").then(m => ({ default: m.OutliersLayout })));
 const OutlierSearchPage = lazy(() => import("./features/outliers/pages/OutlierSearchPage"));
 const PoliciesPage = lazy(() => import("./features/policies/pages/PoliciesPage"));
-const LandingPage = lazy(() => import("./pages/LandingPage"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 
 const queryClient = new QueryClient();
@@ -39,10 +38,6 @@ const App = () => (
       <BrowserRouter>
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            {/* Public Landing & Marketing */}
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/policies" element={<PoliciesPage />} />
-
             {/* Public / Auth Roots */}
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/auth/callback" element={<OAuthCallback />} />
@@ -52,8 +47,8 @@ const App = () => (
               </OnboardingGuard>
             } />
 
-            {/* Protected Creator Workspace Routes */}
-            <Route path="/dashboard" element={
+            {/* Protected Main Routes */}
+            <Route path="/" element={
               <OnboardingGuard>
                 <Index />
               </OnboardingGuard>
@@ -84,6 +79,12 @@ const App = () => (
             }>
               <Route index element={<OutlierSearchPage />} />
             </Route>
+
+            <Route path="/policies" element={
+              <OnboardingGuard>
+                <PoliciesPage />
+              </OnboardingGuard>
+            } />
 
             <Route path="/profile" element={
               <OnboardingGuard>

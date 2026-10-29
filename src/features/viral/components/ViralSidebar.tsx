@@ -53,8 +53,8 @@ export function ViralSidebar({
   }) => (
     <button
       onClick={() => {
-        if (location.pathname !== '/dashboard' && ['viral', 'saved', 'glossary', 'tools'].includes(id)) {
-          navigate('/dashboard', { state: { view: id } });
+        if (location.pathname !== '/' && ['viral', 'saved', 'glossary', 'tools'].includes(id)) {
+          navigate('/', { state: { view: id } });
         } else {
           onChangeView(id);
         }
@@ -84,7 +84,7 @@ export function ViralSidebar({
         <button
           onClick={() => {
             onChangeView("viral");
-            navigate('/dashboard');
+            navigate('/');
           }}
           className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-purple-600 shadow-glow transition-transform hover:scale-105"
         >

@@ -13,14 +13,14 @@ export default function AuthPage() {
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
-            if (session) navigate("/dashboard");
+            if (session) navigate("/");
         });
 
         const {
             data: { subscription },
         } = supabase.auth.onAuthStateChange((_event, session) => {
             setSession(session);
-            if (session) navigate("/dashboard");
+            if (session) navigate("/");
         });
 
         return () => subscription.unsubscribe();

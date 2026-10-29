@@ -1,26 +1,175 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- TODO: Set the document title to the name of your application -->
-    <title>Una app de solucionator.ai</title>
-    <meta name="description" content="Viral Trends Hub - Powered by solucionator.ai" />
-    <meta name="author" content="solucionator.ai" />
+    <title>ViralTrends Hub | Suite de IA & Analítica para Creadores de YouTube Shorts</title>
+    <meta name="description" content="Plataforma SaaS de Inteligencia Artificial para creadores de YouTube Shorts: Analítica de retención, ratio Viewed vs Swiped (VVS), detector de Outliers 10x, generador de guiones con técnica de bucle infinito (loop) y guardián de políticas de YouTube." />
+    <meta name="author" content="ViralTrends Hub" />
+    <meta name="keywords" content="YouTube Shorts, analítica de Shorts, guiones para Shorts, retención YouTube, bucle infinito, loop script, detector de outliers, políticas de YouTube, copyright YouTube, creadores de contenido" />
 
-    <!-- TODO: Update og:title to match your application name -->
-    <meta property="og:title" content="Una app de solucionator.ai" />
-    <meta property="og:description" content="Viral Trends Hub - Powered by solucionator.ai" />
+    <!-- Open Graph / Facebook / WhatsApp -->
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta property="og:url" content="https://viral-trends-hub.vercel.app/" />
+    <meta property="og:title" content="ViralTrends Hub | Suite de IA & Analítica para Creadores de YouTube Shorts" />
+    <meta property="og:description" content="Multiplica las vistas de tus Shorts con algoritmos de Outliers, calibración de ADN de canal, guiones en bucle infinito y guardián de políticas de copyright." />
+    <meta property="og:image" content="https://viral-trends-hub.vercel.app/placeholder.svg" />
 
+    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@Lovable" />
-    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta name="twitter:title" content="ViralTrends Hub | Suite de IA & Analítica para YouTube Shorts" />
+    <meta name="twitter:description" content="Analítica de retención, detector de outliers 10x, guiones en bucle y guardián de políticas de YouTube." />
+    <meta name="twitter:image" content="https://viral-trends-hub.vercel.app/placeholder.svg" />
+
+    <!-- Schema.org JSON-LD for AI Scrapers & Search Engines -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "ViralTrends Hub",
+      "applicationCategory": "MultimediaApplication",
+      "operatingSystem": "Web",
+      "url": "https://viral-trends-hub.vercel.app",
+      "description": "Suite de Inteligencia Artificial para creadores de YouTube Shorts: Analítica de retención, ratio Viewed vs Swiped (VVS), detector de Outliers 10x, generador de guiones con técnica de bucle infinito (loop) y guardián de políticas de YouTube.",
+      "offers": [
+        {
+          "@type": "Offer",
+          "name": "Starter",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        {
+          "@type": "Offer",
+          "name": "Creador Pro",
+          "price": "19",
+          "priceCurrency": "USD"
+        },
+        {
+          "@type": "Offer",
+          "name": "Studio & Agencia",
+          "price": "49",
+          "priceCurrency": "USD"
+        }
+      ],
+      "featureList": [
+        "Sincronización oficial de métricas con YouTube Analytics API v3",
+        "Detector de Outliers: videos con rendimiento 5x a 20x en cada nicho",
+        "Calibración de ADN de Canal (tono, ganchos de 3 segundos, duración objetivo)",
+        "Script Studio: Guiones de 20-25 segundos con técnica de bucle infinito (seamless loop)",
+        "Generador de Prompts visuales para Google Flow y Nanobanana",
+        "Guardián y Base de Datos Oficial de Políticas de YouTube (Copyright, Fair Use, IA, Monetización)",
+        "Copiloto IA en tiempo real para asesoría de canal"
+      ]
+    }
+    </script>
   </head>
 
   <body>
-    <div id="root"></div>
+    <!-- Pre-rendered semantic HTML inside #root so crawlers, LLMs and no-JS scrapers read full content immediately -->
+    <div id="root">
+      <header style="padding: 1.5rem; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; font-family: sans-serif;">
+        <div style="font-weight: 900; font-size: 1.25rem;">
+          🔥 ViralTrends<span style="color: #6366f1;">.ai</span> - Creator SaaS
+        </div>
+        <nav style="display: flex; gap: 1rem; align-items: center;">
+          <a href="/policies" style="color: #999; text-decoration: none; font-size: 0.875rem;">Políticas</a>
+          <a href="/privacy" style="color: #999; text-decoration: none; font-size: 0.875rem;">Privacidad</a>
+          <a href="/terms" style="color: #999; text-decoration: none; font-size: 0.875rem;">Términos</a>
+          <a href="/auth" style="color: #fff; background: #6366f1; padding: 0.5rem 1rem; border-radius: 0.5rem; text-decoration: none; font-size: 0.875rem; font-weight: bold;">Iniciar Sesión / Registro</a>
+        </nav>
+      </header>
+
+      <main style="max-width: 1200px; margin: 0 auto; padding: 3rem 1.5rem; font-family: sans-serif; line-height: 1.6;">
+        <section style="text-align: center; margin-bottom: 4rem;">
+          <span style="background: rgba(99, 102, 241, 0.15); color: #818cf8; padding: 0.35rem 0.85rem; border-radius: 9999px; font-size: 0.75rem; font-weight: bold;">
+            Suite de Inteligencia Artificial para YouTube Shorts
+          </span>
+          <h1 style="font-size: 3rem; font-weight: 900; margin: 1.5rem 0 1rem; line-height: 1.15;">
+            Multiplica las vistas de tus Shorts con Algoritmos Outliers y Guiones en Bucle
+          </h1>
+          <p style="font-size: 1.25rem; color: #888; max-width: 800px; margin: 0 auto 2rem;">
+            ViralTrends Hub es la plataforma todo en uno para creadores de YouTube Shorts: sincroniza tu canal en tiempo real, detecta temas virales con rendimiento 10x, calibra tu ADN editorial, genera guiones estructurados en bucle infinito (loop) y protege tu canal con el Guardián de Políticas de YouTube.
+          </p>
+          <div>
+            <a href="/auth" style="background: #6366f1; color: #fff; padding: 0.85rem 2rem; border-radius: 0.75rem; text-decoration: none; font-weight: bold; font-size: 1.1rem; display: inline-block; margin-right: 1rem;">
+              Comenzar Gratis con mi Canal
+            </a>
+            <a href="/policies" style="background: #222; color: #fff; padding: 0.85rem 2rem; border-radius: 0.75rem; text-decoration: none; font-weight: bold; font-size: 1.1rem; display: inline-block;">
+              Ver Centro de Políticas
+            </a>
+          </div>
+        </section>
+
+        <section style="margin-bottom: 4rem;">
+          <h2 style="font-size: 1.75rem; font-weight: 800; border-bottom: 2px solid #333; padding-bottom: 0.5rem; margin-bottom: 2rem;">
+            Los 4 Módulos Principales de la Plataforma
+          </h2>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem;">
+            <div style="border: 1px solid #333; border-radius: 1rem; padding: 1.5rem; background: #111;">
+              <h3 style="font-size: 1.2rem; font-weight: bold; color: #f97316;">1. Detector de Outliers</h3>
+              <p style="color: #aaa; font-size: 0.9rem;">
+                Analiza millones de videos y detecta aquellos Shorts que obtienen entre 5x y 20x más vistas que el promedio habitual de su propio canal. Permite descubrir ángulos vírales tempranos antes de que el nicho se sature.
+              </p>
+            </div>
+            <div style="border: 1px solid #333; border-radius: 1rem; padding: 1.5rem; background: #111;">
+              <h3 style="font-size: 1.2rem; font-weight: bold; color: #a855f7;">2. ADN de Canal & Retención</h3>
+              <p style="color: #aaa; font-size: 0.9rem;">
+                Calibra tu tono de voz, público objetivo y duración óptima (20 a 25 segundos). Audita la métrica clave de YouTube Shorts: el ratio Viewed vs Swiped (VVS) y la retención en los primeros 3 segundos.
+              </p>
+            </div>
+            <div style="border: 1px solid #333; border-radius: 1rem; padding: 1.5rem; background: #111;">
+              <h3 style="font-size: 1.2rem; font-weight: bold; color: #6366f1;">3. Script Studio & Bucle Infinito</h3>
+              <p style="color: #aaa; font-size: 0.9rem;">
+                Generador de guiones percutantes de 55 a 75 palabras con técnica de loop infinito (la frase final conecta gramaticalmente con el gancho inicial para forzar la segunda reproducción) y prompts visuales para Google Flow y Nanobanana.
+              </p>
+            </div>
+            <div style="border: 1px solid #333; border-radius: 1rem; padding: 1.5rem; background: #111;">
+              <h3 style="font-size: 1.2rem; font-weight: bold; color: #10b981;">4. Guardián de Políticas de YouTube</h3>
+              <p style="color: #aaa; font-size: 0.9rem;">
+                Base de conocimiento oficial integrada con semáforo de riesgo (Seguro, Precaución, Alto Riesgo, Crítico). Asesora sobre Fair Use, Content ID vs Strikes, música comercial, declaración de IA sintética y prevención de desmonetización por contenido reutilizado.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section style="margin-bottom: 4rem;">
+          <h2 style="font-size: 1.75rem; font-weight: 800; border-bottom: 2px solid #333; padding-bottom: 0.5rem; margin-bottom: 2rem;">
+            Planes y Precios SaaS
+          </h2>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem;">
+            <div style="border: 1px solid #333; border-radius: 1rem; padding: 1.5rem;">
+              <h3>Creador Starter</h3>
+              <div style="font-size: 2rem; font-weight: 900; margin: 0.5rem 0;">$0 / mes</div>
+              <p style="color: #888; font-size: 0.85rem;">Sincronización de 1 canal, auditoría Viewed vs Swiped, acceso a políticas de YouTube y 5 búsquedas de outliers mensuales.</p>
+            </div>
+            <div style="border: 2px solid #6366f1; border-radius: 1rem; padding: 1.5rem; background: rgba(99, 102, 241, 0.05);">
+              <span style="background: #6366f1; color: #fff; padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; font-weight: bold;">MÁS POPULAR</span>
+              <h3>Creador Pro</h3>
+              <div style="font-size: 2rem; font-weight: 900; margin: 0.5rem 0;">$19 / mes</div>
+              <p style="color: #888; font-size: 0.85rem;">Sincronización continua, Copiloto IA con ADN de canal, guiones ilimitados en bucle, búsqueda ilimitada de outliers y auditoría preventiva de copyright.</p>
+            </div>
+            <div style="border: 1px solid #333; border-radius: 1rem; padding: 1.5rem;">
+              <h3>Studio & Agencia</h3>
+              <div style="font-size: 2rem; font-weight: 900; margin: 0.5rem 0;">$49 / mes</div>
+              <p style="color: #888; font-size: 0.85rem;">Hasta 5 canales simultáneos, ADN independiente por canal, prompts de imagen/video exportables y soporte prioritario.</p>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer style="padding: 2rem 1.5rem; border-top: 1px solid #222; text-align: center; color: #666; font-size: 0.85rem; font-family: sans-serif;">
+        © 2026 ViralTrends Hub. Plataforma SaaS para Creadores de YouTube Shorts.
+        <div style="margin-top: 0.5rem;">
+          <a href="/privacy" style="color: #888; margin: 0 0.5rem;">Privacidad</a>
+          <a href="/terms" style="color: #888; margin: 0 0.5rem;">Términos</a>
+          <a href="/policies" style="color: #888; margin: 0 0.5rem;">Políticas</a>
+          <a href="/auth" style="color: #888; margin: 0 0.5rem;">Iniciar Sesión</a>
+          <a href="/llms.txt" style="color: #888; margin: 0 0.5rem;">LLMs.txt</a>
+        </div>
+      </footer>
+    </div>
+
+    <!-- React App Client Script -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

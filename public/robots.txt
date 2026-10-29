@@ -12,3 +12,5 @@ Allow: /
 
 User-agent: *
 Allow: /
+
+Sitemap: https://viral-trends-hub.vercel.app/sitemap.xml

@@ -68,7 +68,7 @@ export function DashboardHeader({
                         <span className="font-semibold">{customBackLabel || "Volver"}</span>
                     </Button>
                 ) : (
-                    <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
+                    <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/dashboard')}>
                         {/* Mobile Menu Trigger could go here */}
                         <h1 className="font-bold text-lg tracking-tight">ViralTrends Hub</h1>
                     </div>
